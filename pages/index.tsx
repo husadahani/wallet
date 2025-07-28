@@ -5,7 +5,6 @@ import WalletDashboard from '../components/WalletDashboard'
 import SendModal from '../components/SendModal'
 import ReceiveModal from '../components/ReceiveModal'
 import Notification from '../components/Notification'
-import NetworkSelector from '../components/NetworkSelector'
 import { useDarkMode } from '../hooks/useDarkMode'
 import { useAlchemyWallet } from '../hooks/useAlchemyWallet'
 
@@ -17,7 +16,6 @@ export default function Home() {
   // Initialize dark mode
   useDarkMode()
 
-  // Use Alchemy wallet hook
   const {
     isConnected,
     isLoading,
@@ -26,134 +24,128 @@ export default function Home() {
     user,
     error,
     currentNetwork,
-    supportedNetworks,
+    gasManagerEnabled,
+    smartAccountDeployed,
     loginWithGoogle,
     loginWithFacebook,
+    loginWithTwitter,
+    loginWithEmail,
     logout,
-    switchNetwork,
-    refreshBalance,
-    sendNativeToken,
     sendToken,
+    refreshBalance,
+    deploySmartAccount
   } = useAlchemyWallet()
-
-  const handleGoogleLogin = async () => {
-    try {
-      await loginWithGoogle()
-    } catch (error) {
-      showNotification('Login dengan Google gagal')
-    }
-  }
-
-  const handleFacebookLogin = async () => {
-    try {
-      await loginWithFacebook()
-    } catch (error) {
-      showNotification('Login dengan Facebook gagal')
-    }
-  }
-
-  const handleLogout = () => {
-    logout()
-  }
-
-  const handleNetworkSwitch = async (networkKey: string) => {
-    try {
-      await switchNetwork(networkKey)
-      const networkName = supportedNetworks[networkKey]?.name || networkKey
-      showNotification(`Switched to ${networkName}`)
-    } catch (error) {
-      showNotification('Failed to switch network')
-    }
-  }
-
-  // Wrapper function to adapt sendToken for SendModal component
-  const handleSendToken = async (tokenAddress: string, to: string, amount: string, decimals: number) => {
-    // Get token symbol from tokenBalances if available, otherwise use a default
-    const token = tokenBalances.find(t => t.contractAddress?.toLowerCase() === tokenAddress.toLowerCase())
-    const symbol = token?.symbol || 'TOKEN'
-    
-    return await sendToken({
-      tokenAddress,
-      symbol,
-      to,
-      amount,
-      decimals
-    })
-  }
 
   const showNotification = (message: string) => {
     setNotification({ message, isVisible: true })
+    setTimeout(() => setNotification({ message: '', isVisible: false }), 3000)
   }
 
-  const hideNotification = () => {
-    setNotification({ message: '', isVisible: false })
-  }
+  const loadingMessage = 
+    isLoading && !isConnected ? 'Menghubungkan dengan Alchemy...' :
+    isLoading && !smartAccountDeployed ? 'Menyiapkan Smart Wallet...' :
+    'Memuat...'
 
   return (
     <>
       <Head>
-        <title>CryptoWallet</title>
-        <meta name="description" content="Kelola aset kripto Anda dengan aman" />
+        <title>CryptoWallet BNB - Smart Wallet dengan Alchemy</title>
+        <meta name="description" content="Smart Wallet di BNB Smart Chain dengan Alchemy Account Kit" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <link rel="icon" href="/favicon.ico" />
       </Head>
 
-      <div className="bg-gray-50 dark:bg-gray-900 min-h-screen transition-colors">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
         {!isConnected ? (
           <LoginScreen
-            onGoogleLogin={handleGoogleLogin}
-            onFacebookLogin={handleFacebookLogin}
+            onGoogleLogin={loginWithGoogle}
+            onFacebookLogin={loginWithFacebook}
+            onTwitterLogin={loginWithTwitter}
+            onEmailLogin={loginWithEmail}
             isLoading={isLoading}
-            loadingMessage={isLoading ? 'Menghubungkan wallet...' : ''}
+            loadingMessage={loadingMessage}
           />
         ) : (
           <WalletDashboard
             userName={user?.name || 'User'}
             walletAddress={walletInfo?.address || ''}
             balance={walletInfo?.balance || '0'}
-            isDeployed={walletInfo?.isDeployed || false}
+            isDeployed={smartAccountDeployed}
             currentNetwork={currentNetwork}
             tokenBalances={tokenBalances}
-            onLogout={handleLogout}
+            gasManagerEnabled={gasManagerEnabled}
+            onLogout={logout}
             onShowSendModal={() => setShowSendModal(true)}
             onShowReceiveModal={() => setShowReceiveModal(true)}
             onShowNotification={showNotification}
             onRefreshBalance={refreshBalance}
-            networkSelector={
-              <NetworkSelector
-                currentNetwork={currentNetwork}
-                supportedNetworks={supportedNetworks}
-                onNetworkChange={handleNetworkSwitch}
-                isLoading={isLoading}
-              />
-            }
           />
         )}
 
-        <SendModal
-          isOpen={showSendModal}
-          onClose={() => setShowSendModal(false)}
-          onSend={sendNativeToken}
-          onSendToken={handleSendToken}
-          onShowNotification={showNotification}
-        />
+        {/* Send Modal */}
+        {showSendModal && (
+          <SendModal
+            walletAddress={walletInfo?.address || ''}
+            tokenBalances={tokenBalances}
+            onClose={() => setShowSendModal(false)}
+            onSend={async (data) => {
+              try {
+                const result = await sendToken(data)
+                if (result.success) {
+                  showNotification(`Transaksi berhasil! Hash: ${result.transactionHash?.slice(0, 10)}...`)
+                  setShowSendModal(false)
+                  // Auto refresh balance after successful transaction
+                  setTimeout(() => refreshBalance(), 2000)
+                } else {
+                  showNotification(`Transaksi gagal: ${result.error}`)
+                }
+              } catch (error) {
+                showNotification(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`)
+              }
+            }}
+            isDeployed={smartAccountDeployed}
+            gasManagerEnabled={gasManagerEnabled}
+          />
+        )}
 
-        <ReceiveModal
-          isOpen={showReceiveModal}
-          onClose={() => setShowReceiveModal(false)}
-          walletAddress={walletInfo?.address || ''}
-          onShowNotification={showNotification}
-        />
+        {/* Receive Modal */}
+        {showReceiveModal && (
+          <ReceiveModal
+            walletAddress={walletInfo?.address || ''}
+            networkName={currentNetwork?.name || 'BNB Smart Chain'}
+            onClose={() => setShowReceiveModal(false)}
+          />
+        )}
 
+        {/* Notification */}
         <Notification
           message={notification.message}
           isVisible={notification.isVisible}
-          onHide={hideNotification}
+          onClose={() => setNotification({ message: '', isVisible: false })}
         />
 
-        {error && (
-          <div className="fixed top-4 right-4 bg-red-500 text-white p-4 rounded-lg shadow-lg">
+        {/* Error Display */}
+        {error && !isLoading && (
+          <div className="fixed bottom-4 right-4 bg-red-500 text-white px-4 py-2 rounded-lg shadow-lg">
             {error}
+          </div>
+        )}
+
+        {/* Deploy Prompt */}
+        {isConnected && !smartAccountDeployed && !isLoading && (
+          <div className="fixed bottom-4 left-4 right-4 bg-yellow-500 text-white px-4 py-3 rounded-lg shadow-lg max-w-md mx-auto">
+            <div className="flex justify-between items-center">
+              <div>
+                <p className="font-medium">Smart Wallet belum di-deploy</p>
+                <p className="text-sm opacity-90">Deploy untuk mulai bertransaksi</p>
+              </div>
+              <button
+                onClick={deploySmartAccount}
+                className="bg-white text-yellow-600 px-3 py-1 rounded font-medium hover:bg-gray-100 transition-colors"
+              >
+                Deploy
+              </button>
+            </div>
           </div>
         )}
       </div>

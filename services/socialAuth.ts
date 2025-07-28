@@ -1,239 +1,148 @@
-import { AlchemySmartAccountClient, createAlchemySmartAccountClient } from '@alchemy/aa-alchemy'
-import { LightSmartContractAccount } from '@alchemy/aa-accounts'
-import { LocalAccountSigner, sepolia } from '@alchemy/aa-core'
-import { generatePrivateKey } from 'viem/accounts'
+import alchemyWallet from './alchemyWallet'
 
 export interface UserProfile {
   id: string
   name: string
   email: string
-  provider: 'google' | 'facebook'
+  provider: 'google' | 'facebook' | 'twitter' | 'email' | 'alchemy'
   address: string
-  privateKey?: string
 }
 
-// Social authentication configuration
-interface SocialAuthConfig {
-  alchemyApiKey: string
-  alchemyGasManagerPolicyId?: string
-  redirectUri: string
+export interface AuthenticationResult {
+  success: boolean
+  user?: UserProfile
+  error?: string
 }
 
 class SocialAuthService {
-  private config: SocialAuthConfig
-  private smartAccountClient: AlchemySmartAccountClient | null = null
+  private currentUser: UserProfile | null = null
 
-  constructor() {
-    this.config = {
-      alchemyApiKey: process.env.NEXT_PUBLIC_ALCHEMY_API_KEY || '',
-      alchemyGasManagerPolicyId: process.env.NEXT_PUBLIC_ALCHEMY_GAS_POLICY_ID,
-      redirectUri: typeof window !== 'undefined' ? window.location.origin + '/auth/callback' : 'http://localhost:3000/auth/callback'
-    }
-  }
-
-  // Initialize Alchemy Smart Account Client
-  private async initializeAlchemyClient(signer: LocalAccountSigner): Promise<AlchemySmartAccountClient> {
-    const client = await createAlchemySmartAccountClient({
-      apiKey: this.config.alchemyApiKey,
-      chain: sepolia,
-      signer,
-      gasManagerConfig: this.config.alchemyGasManagerPolicyId ? {
-        policyId: this.config.alchemyGasManagerPolicyId
-      } : undefined,
-    })
-
-    return client
-  }
-
-  // Create deterministic signer from user data
-  private createUserSigner(userId: string, provider: string): LocalAccountSigner {
-    // Create a deterministic private key based on user data
-    // In production, you should use a more secure method
-    const seed = `${provider}_${userId}_secure_seed_${Date.now()}`
-    const privateKey = generatePrivateKey()
-    
-    return LocalAccountSigner.privateKeyToAccountSigner(privateKey)
-  }
-
-  // Initialize Google OAuth
-  private initializeGoogleAuth(): Promise<any> {
-    return new Promise((resolve, reject) => {
-      if (typeof window === 'undefined') {
-        reject(new Error('Google Auth requires browser environment'))
-        return
-      }
-
-      // Check if Google API is already loaded
-      if (window.gapi) {
-        resolve(window.gapi)
-        return
-      }
-
-      // Load Google API
-      const script = document.createElement('script')
-      script.src = 'https://apis.google.com/js/api.js'
-      script.onload = () => {
-        window.gapi.load('auth2', () => {
-          window.gapi.auth2.init({
-            client_id: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID
-          }).then(() => {
-            resolve(window.gapi)
-          }).catch(reject)
-        })
-      }
-      script.onerror = reject
-      document.head.appendChild(script)
-    })
-  }
-
-  // Initialize Facebook SDK
-  private initializeFacebookAuth(): Promise<any> {
-    return new Promise((resolve, reject) => {
-      if (typeof window === 'undefined') {
-        reject(new Error('Facebook Auth requires browser environment'))
-        return
-      }
-
-      // Check if Facebook SDK is already loaded
-      if (window.FB) {
-        resolve(window.FB)
-        return
-      }
-
-      // Load Facebook SDK
-      window.fbAsyncInit = () => {
-        window.FB.init({
-          appId: process.env.NEXT_PUBLIC_FACEBOOK_APP_ID,
-          cookie: true,
-          xfbml: true,
-          version: 'v18.0'
-        })
-        resolve(window.FB)
-      }
-
-      const script = document.createElement('script')
-      script.src = 'https://connect.facebook.net/en_US/sdk.js'
-      script.async = true
-      script.defer = true
-      script.crossOrigin = 'anonymous'
-      script.onerror = reject
-      document.head.appendChild(script)
-    })
-  }
-
-  // Google login implementation
+  // Authenticate with Google using Alchemy Embedded Accounts
   async loginWithGoogle(): Promise<UserProfile> {
     try {
-      await this.initializeGoogleAuth()
+      console.log('🔐 Starting Google authentication with Alchemy...')
       
-      const authInstance = window.gapi.auth2.getAuthInstance()
-      const googleUser = await authInstance.signIn()
+      const address = await alchemyWallet.authenticateWithSocial('google')
+      const userInfo = await alchemyWallet.getUserInfo()
       
-      const profile = googleUser.getBasicProfile()
-      const authResponse = googleUser.getAuthResponse()
-      
-      const userId = profile.getId()
-      const email = profile.getEmail()
-      const name = profile.getName()
-      
-      // Create Alchemy signer and smart account
-      const signer = this.createUserSigner(userId, 'google')
-      const smartAccountClient = await this.initializeAlchemyClient(signer)
-      const address = await smartAccountClient.getAddress()
-      
-      this.smartAccountClient = smartAccountClient
-      
+      if (!userInfo) {
+        throw new Error('Failed to get user information after authentication')
+      }
+
       const userProfile: UserProfile = {
-        id: userId,
-        name,
-        email,
+        id: userInfo.id || 'google_user',
+        name: userInfo.email?.split('@')[0] || 'Google User',
+        email: userInfo.email || '',
         provider: 'google',
-        address
+        address: address
       }
       
-      // Store authentication data
-      this.storeUserSession(userProfile, authResponse.access_token)
+      this.currentUser = userProfile
+      this.storeUserSession(userProfile)
       
+      console.log('✅ Google authentication successful:', userProfile)
       return userProfile
     } catch (error) {
-      console.error('Google login error:', error)
+      console.error('❌ Google authentication failed:', error)
       throw new Error('Google authentication failed')
     }
   }
 
-  // Facebook login implementation
+  // Authenticate with Facebook using Alchemy Embedded Accounts
   async loginWithFacebook(): Promise<UserProfile> {
     try {
-      await this.initializeFacebookAuth()
+      console.log('🔐 Starting Facebook authentication with Alchemy...')
       
-      return new Promise((resolve, reject) => {
-        window.FB.login(async (response: any) => {
-          if (response.authResponse) {
-            try {
-              // Get user info from Facebook
-              window.FB.api('/me', { fields: 'id,name,email' }, async (userInfo: any) => {
-                const userId = userInfo.id
-                const email = userInfo.email
-                const name = userInfo.name
-                
-                // Create Alchemy signer and smart account
-                const signer = this.createUserSigner(userId, 'facebook')
-                const smartAccountClient = await this.initializeAlchemyClient(signer)
-                const address = await smartAccountClient.getAddress()
-                
-                this.smartAccountClient = smartAccountClient
-                
-                const userProfile: UserProfile = {
-                  id: userId,
-                  name,
-                  email,
-                  provider: 'facebook',
-                  address
-                }
-                
-                // Store authentication data
-                this.storeUserSession(userProfile, response.authResponse.accessToken)
-                
-                resolve(userProfile)
-              })
-            } catch (error) {
-              reject(error)
-            }
-          } else {
-            reject(new Error('Facebook login cancelled'))
-          }
-        }, { scope: 'email' })
-      })
+      const address = await alchemyWallet.authenticateWithSocial('facebook')
+      const userInfo = await alchemyWallet.getUserInfo()
+      
+      if (!userInfo) {
+        throw new Error('Failed to get user information after authentication')
+      }
+
+      const userProfile: UserProfile = {
+        id: userInfo.id || 'facebook_user',
+        name: userInfo.email?.split('@')[0] || 'Facebook User',
+        email: userInfo.email || '',
+        provider: 'facebook',
+        address: address
+      }
+      
+      this.currentUser = userProfile
+      this.storeUserSession(userProfile)
+      
+      console.log('✅ Facebook authentication successful:', userProfile)
+      return userProfile
     } catch (error) {
-      console.error('Facebook login error:', error)
+      console.error('❌ Facebook authentication failed:', error)
       throw new Error('Facebook authentication failed')
     }
   }
 
-  // Get current smart account client
-  getSmartAccountClient(): AlchemySmartAccountClient | null {
-    return this.smartAccountClient
-  }
-
-  // Send transaction using smart account
-  async sendTransaction(to: string, value: bigint, data?: string): Promise<string> {
-    if (!this.smartAccountClient) {
-      throw new Error('User not authenticated or smart account not initialized')
-    }
-
-    const result = await this.smartAccountClient.sendUserOperation({
-      uo: {
-        target: to as `0x${string}`,
-        data: data || '0x',
-        value
+  // Authenticate with Twitter using Alchemy Embedded Accounts
+  async loginWithTwitter(): Promise<UserProfile> {
+    try {
+      console.log('🔐 Starting Twitter authentication with Alchemy...')
+      
+      const address = await alchemyWallet.authenticateWithSocial('twitter')
+      const userInfo = await alchemyWallet.getUserInfo()
+      
+      if (!userInfo) {
+        throw new Error('Failed to get user information after authentication')
       }
-    })
 
-    return result.hash
+      const userProfile: UserProfile = {
+        id: userInfo.id || 'twitter_user',
+        name: userInfo.email?.split('@')[0] || 'Twitter User',
+        email: userInfo.email || '',
+        provider: 'twitter',
+        address: address
+      }
+      
+      this.currentUser = userProfile
+      this.storeUserSession(userProfile)
+      
+      console.log('✅ Twitter authentication successful:', userProfile)
+      return userProfile
+    } catch (error) {
+      console.error('❌ Twitter authentication failed:', error)
+      throw new Error('Twitter authentication failed')
+    }
   }
 
-  // Store user session with enhanced security
-  storeUserSession(user: UserProfile, accessToken?: string) {
+  // Authenticate with Email using Alchemy Embedded Accounts
+  async loginWithEmail(): Promise<UserProfile> {
+    try {
+      console.log('🔐 Starting Email authentication with Alchemy...')
+      
+      const address = await alchemyWallet.authenticateWithSocial('email')
+      const userInfo = await alchemyWallet.getUserInfo()
+      
+      if (!userInfo) {
+        throw new Error('Failed to get user information after authentication')
+      }
+
+      const userProfile: UserProfile = {
+        id: userInfo.id || 'email_user',
+        name: userInfo.email?.split('@')[0] || 'Email User',
+        email: userInfo.email || '',
+        provider: 'email',
+        address: address
+      }
+      
+      this.currentUser = userProfile
+      this.storeUserSession(userProfile)
+      
+      console.log('✅ Email authentication successful:', userProfile)
+      return userProfile
+    } catch (error) {
+      console.error('❌ Email authentication failed:', error)
+      throw new Error('Email authentication failed')
+    }
+  }
+
+  // Store user session securely
+  private storeUserSession(user: UserProfile): void {
     if (typeof window !== 'undefined') {
       const sessionData = {
         id: user.id,
@@ -244,29 +153,32 @@ class SocialAuthService {
         timestamp: Date.now()
       }
       
-      localStorage.setItem('user_session', JSON.stringify(sessionData))
-      
-      if (accessToken) {
-        // Store access token securely (consider encryption in production)
-        sessionStorage.setItem('access_token', accessToken)
-      }
+      localStorage.setItem('alchemy_user_session', JSON.stringify(sessionData))
+      console.log('💾 User session stored successfully')
     }
   }
 
   // Retrieve user session
   getUserSession(): UserProfile | null {
     if (typeof window !== 'undefined') {
-      const sessionData = localStorage.getItem('user_session')
+      const sessionData = localStorage.getItem('alchemy_user_session')
       
       if (sessionData) {
-        const parsed = JSON.parse(sessionData)
-        
-        // Check if session is still valid (24 hours)
-        const isValid = Date.now() - parsed.timestamp < 24 * 60 * 60 * 1000
-        
-        if (isValid) {
-          return parsed
-        } else {
+        try {
+          const parsed = JSON.parse(sessionData)
+          
+          // Check if session is still valid (24 hours)
+          const isValid = Date.now() - parsed.timestamp < 24 * 60 * 60 * 1000
+          
+          if (isValid) {
+            this.currentUser = parsed
+            return parsed
+          } else {
+            console.log('🕒 Session expired, clearing...')
+            this.clearUserSession()
+          }
+        } catch (error) {
+          console.error('Error parsing session data:', error)
           this.clearUserSession()
         }
       }
@@ -274,63 +186,130 @@ class SocialAuthService {
     return null
   }
 
-  // Clear user session and disconnect smart account
-  clearUserSession() {
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('user_session')
-      sessionStorage.removeItem('access_token')
-    }
-    
-    // Disconnect smart account client
-    this.smartAccountClient = null
-    
-    // Sign out from social providers
-    this.signOutFromProviders()
-  }
-
-  // Sign out from social providers
-  private async signOutFromProviders() {
-    try {
-      // Sign out from Google
-      if (window.gapi && window.gapi.auth2) {
-        const authInstance = window.gapi.auth2.getAuthInstance()
-        if (authInstance.isSignedIn.get()) {
-          await authInstance.signOut()
-        }
-      }
-      
-      // Sign out from Facebook
-      if (window.FB) {
-        window.FB.logout()
-      }
-    } catch (error) {
-      console.warn('Error signing out from social providers:', error)
-    }
+  // Get current user
+  getCurrentUser(): UserProfile | null {
+    return this.currentUser || this.getUserSession()
   }
 
   // Check if user is authenticated
   isAuthenticated(): boolean {
-    return this.getUserSession() !== null && this.smartAccountClient !== null
+    const user = this.getCurrentUser()
+    const walletConnected = alchemyWallet.isWalletConnected()
+    
+    return !!(user && walletConnected)
   }
 
-  // Get user's smart account balance
-  async getBalance(): Promise<string> {
-    if (!this.smartAccountClient) {
+  // Logout and cleanup
+  async logout(): Promise<void> {
+    try {
+      console.log('🚪 Logging out...')
+      
+      // Clear current user
+      this.currentUser = null
+      
+      // Clear session storage
+      this.clearUserSession()
+      
+      // Logout from Alchemy wallet
+      await alchemyWallet.logout()
+      
+      console.log('✅ Logout successful')
+    } catch (error) {
+      console.error('Error during logout:', error)
+    }
+  }
+
+  // Clear user session
+  private clearUserSession(): void {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('alchemy_user_session')
+      sessionStorage.clear() // Clear any temporary data
+    }
+    this.currentUser = null
+  }
+
+  // Get user's wallet balance
+  async getUserBalance(): Promise<string> {
+    if (!this.isAuthenticated()) {
       throw new Error('User not authenticated')
     }
 
-    // This would get the balance of the smart account
-    // Implementation depends on the specific Alchemy AA client methods
-    return '0'
+    try {
+      const walletInfo = await alchemyWallet.getWalletInfo()
+      return walletInfo?.balance || '0'
+    } catch (error) {
+      console.error('Error getting user balance:', error)
+      return '0'
+    }
   }
-}
 
-// Extend window object for Google and Facebook APIs
-declare global {
-  interface Window {
-    gapi: any
-    FB: any
-    fbAsyncInit: () => void
+  // Get user's smart account address
+  getUserAddress(): string | null {
+    const user = this.getCurrentUser()
+    return user?.address || null
+  }
+
+  // Refresh user session with latest data
+  async refreshUserSession(): Promise<UserProfile | null> {
+    if (!this.isAuthenticated()) {
+      return null
+    }
+
+    try {
+      const userInfo = await alchemyWallet.getUserInfo()
+      const walletInfo = await alchemyWallet.getWalletInfo()
+      
+      if (userInfo && walletInfo && this.currentUser) {
+        const updatedUser: UserProfile = {
+          ...this.currentUser,
+          address: walletInfo.address
+        }
+        
+        this.currentUser = updatedUser
+        this.storeUserSession(updatedUser)
+        
+        return updatedUser
+      }
+    } catch (error) {
+      console.error('Error refreshing user session:', error)
+    }
+    
+    return null
+  }
+
+  // Validate authentication status
+  async validateAuth(): Promise<boolean> {
+    try {
+      const user = this.getCurrentUser()
+      const walletConnected = alchemyWallet.isWalletConnected()
+      
+      if (!user || !walletConnected) {
+        // Clear invalid session
+        this.clearUserSession()
+        return false
+      }
+      
+      // Optionally refresh user data
+      await this.refreshUserSession()
+      
+      return true
+    } catch (error) {
+      console.error('Error validating authentication:', error)
+      this.clearUserSession()
+      return false
+    }
+  }
+
+  // Get authentication methods available
+  getAvailableAuthMethods(): string[] {
+    return ['google', 'facebook', 'twitter', 'email']
+  }
+
+  // Get provider-specific authentication URL (for redirect flows)
+  getAuthUrl(provider: 'google' | 'facebook' | 'twitter' | 'email'): string {
+    // For Alchemy embedded accounts, this is handled internally
+    // Return the current domain as the auth happens in popup/iframe
+    return typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000'
   }
 }
 
