@@ -49,7 +49,8 @@ const SendModal: React.FC<SendModalProps> = ({
       }
 
       if (result.success) {
-        onShowNotification(`Transaksi berhasil! Hash: ${result.hash.slice(0, 10)}...`)
+        const hashText = result.hash ? `Hash: ${result.hash.slice(0, 10)}...` : 'Berhasil!'
+        onShowNotification(`Transaksi berhasil! ${hashText}`)
         setRecipient('')
         setAmount('')
         onClose()
