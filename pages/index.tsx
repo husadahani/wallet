@@ -5,13 +5,11 @@ import WalletDashboard from '../components/WalletDashboard'
 import SendModal from '../components/SendModal'
 import ReceiveModal from '../components/ReceiveModal'
 import Notification from '../components/Notification'
+import NetworkSelector from '../components/NetworkSelector'
 import { useDarkMode } from '../hooks/useDarkMode'
+import { useAlchemyWallet } from '../hooks/useAlchemyWallet'
 
 export default function Home() {
-  const [isLoggedIn, setIsLoggedIn] = useState(false)
-  const [userName, setUserName] = useState('')
-  const [isLoading, setIsLoading] = useState(false)
-  const [loadingMessage, setLoadingMessage] = useState('')
   const [showSendModal, setShowSendModal] = useState(false)
   const [showReceiveModal, setShowReceiveModal] = useState(false)
   const [notification, setNotification] = useState({ message: '', isVisible: false })
@@ -19,31 +17,53 @@ export default function Home() {
   // Initialize dark mode
   useDarkMode()
 
-  const handleGoogleLogin = () => {
-    setIsLoading(true)
-    setLoadingMessage('Masuk dengan Google...')
-    
-    setTimeout(() => {
-      setIsLoading(false)
-      setUserName('John Doe')
-      setIsLoggedIn(true)
-    }, 2000)
+  // Use Alchemy wallet hook
+  const {
+    isConnected,
+    isLoading,
+    walletInfo,
+    tokenBalances,
+    user,
+    error,
+    currentNetwork,
+    supportedNetworks,
+    loginWithGoogle,
+    loginWithFacebook,
+    logout,
+    switchNetwork,
+    refreshBalance,
+    sendNativeToken,
+    sendToken,
+  } = useAlchemyWallet()
+
+  const handleGoogleLogin = async () => {
+    try {
+      await loginWithGoogle()
+    } catch (error) {
+      showNotification('Login dengan Google gagal')
+    }
   }
 
-  const handleFacebookLogin = () => {
-    setIsLoading(true)
-    setLoadingMessage('Masuk dengan Facebook...')
-    
-    setTimeout(() => {
-      setIsLoading(false)
-      setUserName('Jane Smith')
-      setIsLoggedIn(true)
-    }, 2000)
+  const handleFacebookLogin = async () => {
+    try {
+      await loginWithFacebook()
+    } catch (error) {
+      showNotification('Login dengan Facebook gagal')
+    }
   }
 
   const handleLogout = () => {
-    setIsLoggedIn(false)
-    setUserName('')
+    logout()
+  }
+
+  const handleNetworkSwitch = async (networkKey: string) => {
+    try {
+      await switchNetwork(networkKey)
+      const networkName = supportedNetworks[networkKey]?.name || networkKey
+      showNotification(`Switched to ${networkName}`)
+    } catch (error) {
+      showNotification('Failed to switch network')
+    }
   }
 
   const showNotification = (message: string) => {
@@ -64,31 +84,49 @@ export default function Home() {
       </Head>
 
       <div className="bg-gray-50 dark:bg-gray-900 min-h-screen transition-colors">
-        {!isLoggedIn ? (
+        {!isConnected ? (
           <LoginScreen
             onGoogleLogin={handleGoogleLogin}
             onFacebookLogin={handleFacebookLogin}
             isLoading={isLoading}
-            loadingMessage={loadingMessage}
+            loadingMessage={isLoading ? 'Menghubungkan wallet...' : ''}
           />
         ) : (
           <WalletDashboard
-            userName={userName}
+            userName={user?.name || 'User'}
+            walletAddress={walletInfo?.address || ''}
+            balance={walletInfo?.balance || '0'}
+            isDeployed={walletInfo?.isDeployed || false}
+            currentNetwork={currentNetwork}
+            tokenBalances={tokenBalances}
             onLogout={handleLogout}
             onShowSendModal={() => setShowSendModal(true)}
             onShowReceiveModal={() => setShowReceiveModal(true)}
             onShowNotification={showNotification}
+            onRefreshBalance={refreshBalance}
+            networkSelector={
+              <NetworkSelector
+                currentNetwork={currentNetwork}
+                supportedNetworks={supportedNetworks}
+                onNetworkChange={handleNetworkSwitch}
+                isLoading={isLoading}
+              />
+            }
           />
         )}
 
         <SendModal
           isOpen={showSendModal}
           onClose={() => setShowSendModal(false)}
+          onSend={sendNativeToken}
+          onSendToken={sendToken}
+          onShowNotification={showNotification}
         />
 
         <ReceiveModal
           isOpen={showReceiveModal}
           onClose={() => setShowReceiveModal(false)}
+          walletAddress={walletInfo?.address || ''}
           onShowNotification={showNotification}
         />
 
@@ -97,6 +135,12 @@ export default function Home() {
           isVisible={notification.isVisible}
           onHide={hideNotification}
         />
+
+        {error && (
+          <div className="fixed top-4 right-4 bg-red-500 text-white p-4 rounded-lg shadow-lg">
+            {error}
+          </div>
+        )}
       </div>
     </>
   )

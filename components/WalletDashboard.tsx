@@ -19,40 +19,83 @@ interface Token {
   balance: string
   icon: any
   color: string
+  contractAddress?: string
+  decimals: number
 }
+
+import { NetworkConfig } from '../services/alchemyWallet'
 
 interface WalletDashboardProps {
   userName: string
+  walletAddress: string
+  balance: string
+  isDeployed: boolean
+  currentNetwork: NetworkConfig | null
+  tokenBalances: Array<{
+    symbol: string
+    balance: string
+    contractAddress?: string
+    decimals: number
+  }>
   onLogout: () => void
   onShowSendModal: () => void
   onShowReceiveModal: () => void
   onShowNotification: (message: string) => void
+  onRefreshBalance: () => void
+  networkSelector?: React.ReactNode
 }
 
 const WalletDashboard: React.FC<WalletDashboardProps> = ({
   userName,
+  walletAddress,
+  balance,
+  isDeployed,
+  currentNetwork,
+  tokenBalances,
   onLogout,
   onShowSendModal,
   onShowReceiveModal,
-  onShowNotification
+  onShowNotification,
+  onRefreshBalance,
+  networkSelector
 }) => {
   const [tokens, setTokens] = useState<Token[]>([])
-  const walletAddress = '0x742d...E8B3'
+  const displayAddress = walletAddress ? `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}` : ''
 
-  const tokensData: Token[] = [
-    { name: 'Ethereum', symbol: 'ETH', balance: '2.45', icon: faEthereum, color: 'text-blue-500' },
-    { name: 'Bitcoin', symbol: 'BTC', balance: '0.0123', icon: faBitcoin, color: 'text-orange-500' },
-    { name: 'USD Coin', symbol: 'USDC', balance: '1,250.00', icon: faDollarSign, color: 'text-green-500' },
-    { name: 'Chainlink', symbol: 'LINK', balance: '45.67', icon: faLink, color: 'text-blue-600' }
-  ]
+  const getTokenIcon = (symbol: string) => {
+    switch (symbol.toUpperCase()) {
+      case 'ETH':
+        return { icon: faEthereum, color: 'text-blue-500' }
+      case 'BTC':
+        return { icon: faBitcoin, color: 'text-orange-500' }
+      case 'USDC':
+        return { icon: faDollarSign, color: 'text-green-500' }
+      case 'LINK':
+        return { icon: faLink, color: 'text-blue-600' }
+      default:
+        return { icon: faDollarSign, color: 'text-gray-500' }
+    }
+  }
 
   useEffect(() => {
-    setTokens(tokensData)
-  }, [])
+    const formattedTokens: Token[] = tokenBalances.map(token => {
+      const { icon, color } = getTokenIcon(token.symbol)
+      return {
+        name: token.symbol === 'ETH' ? 'Ethereum' : token.symbol,
+        symbol: token.symbol,
+        balance: parseFloat(token.balance).toFixed(4),
+        icon,
+        color,
+        contractAddress: token.contractAddress,
+        decimals: token.decimals
+      }
+    })
+    setTokens(formattedTokens)
+  }, [tokenBalances])
 
   const copyAddress = async () => {
     try {
-      await navigator.clipboard.writeText('0x742d35Cc6e15A2e1c2B3E8B3')
+      await navigator.clipboard.writeText(walletAddress)
       onShowNotification('Alamat berhasil disalin!')
     } catch (err) {
       console.error('Failed to copy address:', err)
@@ -69,12 +112,15 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
               <h1 className="text-2xl font-bold">Halo, {userName}!</h1>
               <p className="text-blue-100">Selamat datang kembali</p>
             </div>
-            <button 
-              onClick={onLogout}
-              className="p-2 hover:bg-white hover:bg-opacity-20 rounded-lg transition-colors"
-            >
-              <FontAwesomeIcon icon={faSignOutAlt} className="text-xl" />
-            </button>
+            <div className="flex items-center space-x-2">
+              {networkSelector}
+              <button 
+                onClick={onLogout}
+                className="p-2 hover:bg-white hover:bg-opacity-20 rounded-lg transition-colors"
+              >
+                <FontAwesomeIcon icon={faSignOutAlt} className="text-xl" />
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -84,18 +130,32 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
         <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 card-shadow animate-fade-in">
           <div className="flex justify-between items-start mb-4">
             <div>
-              <h3 className="text-lg font-semibold text-gray-800 dark:text-white">Wallet Utama</h3>
-              <p className="text-sm text-gray-500 dark:text-gray-400">Ethereum Mainnet</p>
+              <h3 className="text-lg font-semibold text-gray-800 dark:text-white">Smart Wallet</h3>
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                {currentNetwork?.name || 'Unknown Network'}
+              </p>
             </div>
-            <div className="bg-green-100 dark:bg-green-900 text-green-600 dark:text-green-400 px-3 py-1 rounded-full text-sm font-medium">
-              Aktif
+            <div className={`px-3 py-1 rounded-full text-sm font-medium ${
+              isDeployed 
+                ? 'bg-green-100 dark:bg-green-900 text-green-600 dark:text-green-400' 
+                : 'bg-yellow-100 dark:bg-yellow-900 text-yellow-600 dark:text-yellow-400'
+            }`}>
+              {isDeployed ? 'Deployed' : 'Not Deployed'}
             </div>
           </div>
           
           <div className="border-t dark:border-gray-700 pt-4">
-            <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">Alamat Wallet</p>
+            <div className="flex justify-between items-center mb-2">
+              <p className="text-sm text-gray-500 dark:text-gray-400">Alamat Wallet</p>
+              <button 
+                onClick={onRefreshBalance}
+                className="text-primary hover:text-primary-dark transition-colors text-sm"
+              >
+                Refresh
+              </button>
+            </div>
             <div className="bg-gray-50 dark:bg-gray-700 p-3 rounded-lg flex items-center justify-between">
-              <span className="text-sm font-mono text-gray-700 dark:text-gray-300">{walletAddress}</span>
+              <span className="text-sm font-mono text-gray-700 dark:text-gray-300">{displayAddress}</span>
               <button 
                 onClick={copyAddress}
                 className="text-primary hover:text-primary-dark transition-colors"
