@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CryptoWallet</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://kit.fontawesome.com/a076d05399.js" crossorigin="anonymous"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#5D5CDE',
+                        'primary-dark': '#4845B8',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .gradient-bg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .card-shadow {
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+        }
+        .fade-in {
+            animation: fadeIn 0.5s ease-in;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .slide-up {
+            animation: slideUp 0.3s ease-out;
+        }
+        @keyframes slideUp {
+            from { transform: translateY(100%); }
+            to { transform: translateY(0); }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 dark:bg-gray-900 min-h-screen transition-colors">
+    <!-- Login Screen -->
+    <div id="loginScreen" class="min-h-screen flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-8 w-full max-w-md">
+            <div class="text-center mb-8">
+                <div class="w-16 h-16 bg-primary rounded-full flex items-center justify-center mx-auto mb-4">
+                    <i class="fas fa-wallet text-white text-2xl"></i>
+                </div>
+                <h1 class="text-3xl font-bold text-gray-800 dark:text-white mb-2">CryptoWallet</h1>
+                <p class="text-gray-600 dark:text-gray-400">Kelola aset kripto Anda dengan aman</p>
+            </div>
+
+            <div class="space-y-4">
+                <button onclick="loginWithGoogle()" 
+                        class="w-full bg-white border-2 border-gray-200 dark:border-gray-600 dark:bg-gray-700 text-gray-700 dark:text-gray-200 py-4 px-6 rounded-xl font-medium hover:bg-gray-50 dark:hover:bg-gray-600 transition-all duration-200 flex items-center justify-center space-x-3">
+                    <svg class="w-5 h-5" viewBox="0 0 24 24">
+                        <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                        <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                        <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                        <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                    </svg>
+                    <span>Masuk dengan Google</span>
+                </button>
+
+                <button onclick="loginWithFacebook()" 
+                        class="w-full bg-blue-600 text-white py-4 px-6 rounded-xl font-medium hover:bg-blue-700 transition-all duration-200 flex items-center justify-center space-x-3">
+                    <i class="fab fa-facebook-f text-lg"></i>
+                    <span>Masuk dengan Facebook</span>
+                </button>
+            </div>
+
+            <div class="mt-8 text-center">
+                <p class="text-sm text-gray-500 dark:text-gray-400">
+                    Dengan masuk, Anda menyetujui 
+                    <a href="#" class="text-primary hover:underline">Syarat & Ketentuan</a> kami
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Wallet Dashboard -->
+    <div id="walletDashboard" class="hidden min-h-screen">
+        <!-- Header -->
+        <div class="gradient-bg text-white p-6">
+            <div class="max-w-md mx-auto">
+                <div class="flex justify-between items-center mb-6">
+                    <div>
+                        <h1 class="text-2xl font-bold">Halo, <span id="userName">User</span>!</h1>
+                        <p class="text-blue-100">Selamat datang kembali</p>
+                    </div>
+                    <button onclick="logout()" class="p-2 hover:bg-white hover:bg-opacity-20 rounded-lg transition-colors">
+                        <i class="fas fa-sign-out-alt text-xl"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Wallet Info Card -->
+        <div class="max-w-md mx-auto px-6 -mt-8">
+            <div class="bg-white dark:bg-gray-800 rounded-2xl p-6 card-shadow fade-in">
+                <div class="flex justify-between items-start mb-4">
+                    <div>
+                        <h3 class="text-lg font-semibold text-gray-800 dark:text-white">Wallet Utama</h3>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">Ethereum Mainnet</p>
+                    </div>
+                    <div class="bg-green-100 dark:bg-green-900 text-green-600 dark:text-green-400 px-3 py-1 rounded-full text-sm font-medium">
+                        Aktif
+                    </div>
+                </div>
+                
+                <div class="border-t dark:border-gray-700 pt-4">
+                    <p class="text-sm text-gray-500 dark:text-gray-400 mb-2">Alamat Wallet</p>
+                    <div class="bg-gray-50 dark:bg-gray-700 p-3 rounded-lg flex items-center justify-between">
+                        <span class="text-sm font-mono text-gray-700 dark:text-gray-300" id="walletAddress">0x742d...E8B3</span>
+                        <button onclick="copyAddress()" class="text-primary hover:text-primary-dark transition-colors">
+                            <i class="fas fa-copy"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tokens Section -->
+        <div class="max-w-md mx-auto px-6 mt-6">
+            <div class="bg-white dark:bg-gray-800 rounded-2xl p-6 card-shadow">
+                <h3 class="text-xl font-semibold text-gray-800 dark:text-white mb-6">Token Saya</h3>
+                
+                <div class="space-y-4" id="tokenList">
+                    <!-- Token items will be inserted here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="max-w-md mx-auto px-6 mt-6 mb-8">
+            <div class="grid grid-cols-2 gap-4">
+                <button onclick="showSendModal()" 
+                        class="bg-primary text-white py-4 px-6 rounded-xl font-medium hover:bg-primary-dark transition-all duration-200 flex items-center justify-center space-x-2">
+                    <i class="fas fa-paper-plane"></i>
+                    <span>Kirim</span>
+                </button>
+                
+                <button onclick="showReceiveModal()" 
+                        class="bg-green-500 text-white py-4 px-6 rounded-xl font-medium hover:bg-green-600 transition-all duration-200 flex items-center justify-center space-x-2">
+                    <i class="fas fa-qrcode"></i>
+                    <span>Terima</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Send Modal -->
+    <div id="sendModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-end sm:items-center justify-center z-50">
+        <div class="bg-white dark:bg-gray-800 w-full sm:max-w-md sm:rounded-2xl rounded-t-2xl slide-up">
+            <div class="p-6">
+                <div class="flex justify-between items-center mb-6">
+                    <h3 class="text-xl font-semibold text-gray-800 dark:text-white">Kirim Token</h3>
+                    <button onclick="closeSendModal()" class="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">
+                        <i class="fas fa-times text-xl"></i>
+                    </button>
+                </div>
+                
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Alamat Penerima</label>
+                        <input type="text" placeholder="0x..." 
+                               class="w-full p-4 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-800 dark:text-white text-base focus:ring-2 focus:ring-primary focus:border-transparent">
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Jumlah</label>
+                        <input type="number" placeholder="0.00" 
+                               class="w-full p-4 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-800 dark:text-white text-base focus:ring-2 focus:ring-primary focus:border-transparent">
+                    </div>
+                    
+                    <button class="w-full bg-primary text-white py-4 px-6 rounded-xl font-medium hover:bg-primary-dark transition-colors">
+                        Kirim Token
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Receive Modal -->
+    <div id="receiveModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-end sm:items-center justify-center z-50">
+        <div class="bg-white dark:bg-gray-800 w-full sm:max-w-md sm:rounded-2xl rounded-t-2xl slide-up">
+            <div class="p-6 text-center">
+                <div class="flex justify-between items-center mb-6">
+                    <h3 class="text-xl font-semibold text-gray-800 dark:text-white">Terima Token</h3>
+                    <button onclick="closeReceiveModal()" class="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">
+                        <i class="fas fa-times text-xl"></i>
+                    </button>
+                </div>
+                
+                <div class="bg-white p-6 rounded-xl border-2 border-gray-200 dark:border-gray-600 dark:bg-gray-700 mb-6">
+                    <div class="w-48 h-48 bg-gray-200 dark:bg-gray-600 rounded-lg mx-auto mb-4 flex items-center justify-center">
+                        <i class="fas fa-qrcode text-6xl text-gray-400"></i>
+                    </div>
+                    <p class="text-sm text-gray-500 dark:text-gray-400">QR Code untuk alamat wallet Anda</p>
+                </div>
+                
+                <div class="bg-gray-50 dark:bg-gray-700 p-3 rounded-lg mb-4">
+                    <p class="text-sm font-mono text-gray-700 dark:text-gray-300" id="receiveAddress">0x742d35Cc6e15A2e1c2B3E8B3</p>
+                </div>
+                
+                <button onclick="copyReceiveAddress()" class="w-full bg-green-500 text-white py-3 px-6 rounded-xl font-medium hover:bg-green-600 transition-colors">
+                    <i class="fas fa-copy mr-2"></i>
+                    Salin Alamat
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Dark mode setup
+        if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+            document.documentElement.classList.add('dark');
+        }
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', event => {
+            if (event.matches) {
+                document.documentElement.classList.add('dark');
+            } else {
+                document.documentElement.classList.remove('dark');
+            }
+        });
+
+        // Sample tokens data
+        const tokensData = [
+            { name: 'Ethereum', symbol: 'ETH', balance: '2.45', icon: 'fas fa-ethereum', color: 'text-blue-500' },
+            { name: 'Bitcoin', symbol: 'BTC', balance: '0.0123', icon: 'fab fa-bitcoin', color: 'text-orange-500' },
+            { name: 'USD Coin', symbol: 'USDC', balance: '1,250.00', icon: 'fas fa-dollar-sign', color: 'text-green-500' },
+            { name: 'Chainlink', symbol: 'LINK', balance: '45.67', icon: 'fas fa-link', color: 'text-blue-600' }
+        ];
+
+        // Login functions
+        function loginWithGoogle() {
+            // Simulate login process
+            showLoadingState('Masuk dengan Google...');
+            setTimeout(() => {
+                completeLogin('John Doe');
+            }, 2000);
+        }
+
+        function loginWithFacebook() {
+            // Simulate login process
+            showLoadingState('Masuk dengan Facebook...');
+            setTimeout(() => {
+                completeLogin('Jane Smith');
+            }, 2000);
+        }
+
+        function showLoadingState(message) {
+            const loginScreen = document.getElementById('loginScreen');
+            loginScreen.innerHTML = `
+                <div class="min-h-screen flex items-center justify-center p-4">
+                    <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-8 w-full max-w-md text-center">
+                        <div class="animate-spin w-12 h-12 border-4 border-primary border-t-transparent rounded-full mx-auto mb-4"></div>
+                        <p class="text-gray-600 dark:text-gray-400">${message}</p>
+                    </div>
+                </div>
+            `;
+        }
+
+        function completeLogin(userName) {
+            document.getElementById('userName').textContent = userName;
+            document.getElementById('loginScreen').classList.add('hidden');
+            document.getElementById('walletDashboard').classList.remove('hidden');
+            loadTokens();
+        }
+
+        function logout() {
+            document.getElementById('walletDashboard').classList.add('hidden');
+            document.getElementById('loginScreen').classList.remove('hidden');
+            // Reset login screen
+            location.reload();
+        }
+
+        // Wallet functions
+        function loadTokens() {
+            const tokenList = document.getElementById('tokenList');
+            tokenList.innerHTML = '';
+            
+            tokensData.forEach(token => {
+                const tokenElement = document.createElement('div');
+                tokenElement.className = 'flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-xl transition-colors';
+                tokenElement.innerHTML = `
+                    <div class="flex items-center space-x-3">
+                        <div class="w-10 h-10 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center">
+                            <i class="${token.icon} ${token.color}"></i>
+                        </div>
+                        <div>
+                            <p class="font-medium text-gray-800 dark:text-white">${token.name}</p>
+                            <p class="text-sm text-gray-500 dark:text-gray-400">${token.symbol}</p>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <p class="font-semibold text-gray-800 dark:text-white">${token.balance}</p>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">${token.symbol}</p>
+                    </div>
+                `;
+                tokenList.appendChild(tokenElement);
+            });
+        }
+
+        function copyAddress() {
+            const address = document.getElementById('walletAddress').textContent;
+            navigator.clipboard.writeText('0x742d35Cc6e15A2e1c2B3E8B3').then(() => {
+                showNotification('Alamat berhasil disalin!');
+            });
+        }
+
+        function copyReceiveAddress() {
+            navigator.clipboard.writeText('0x742d35Cc6e15A2e1c2B3E8B3').then(() => {
+                showNotification('Alamat berhasil disalin!');
+                closeReceiveModal();
+            });
+        }
+
+        // Modal functions
+        function showSendModal() {
+            document.getElementById('sendModal').classList.remove('hidden');
+        }
+
+        function closeSendModal() {
+            document.getElementById('sendModal').classList.add('hidden');
+        }
+
+        function showReceiveModal() {
+            document.getElementById('receiveModal').classList.remove('hidden');
+        }
+
+        function closeReceiveModal() {
+            document.getElementById('receiveModal').classList.add('hidden');
+        }
+
+        // Notification function
+        function showNotification(message) {
+            const notification = document.createElement('div');
+            notification.className = 'fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg z-50 fade-in';
+            notification.textContent = message;
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.remove();
+            }, 3000);
+        }
+
+        // Close modals when clicking outside
+        document.addEventListener('click', (e) => {
+            if (e.target.id === 'sendModal') {
+                closeSendModal();
+            }
+            if (e.target.id === 'receiveModal') {
+                closeReceiveModal();
+            }
+        });
+    </script>
+</body>
+</html>
