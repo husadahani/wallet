@@ -16,6 +16,8 @@
     "@fortawesome/free-brands-svg-icons": "^6.5.1",
     "@fortawesome/free-solid-svg-icons": "^6.5.1",
     "@fortawesome/react-fontawesome": "^0.2.0",
+    "@turnkey/sdk-browser": "^5.3.4",
+    "@turnkey/viem": "^0.9.10",
     "ethers": "^6.13.4",
     "next": "14.0.4",
     "react": "^18",
