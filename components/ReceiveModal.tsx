@@ -5,11 +5,16 @@ import { faTimes, faQrcode, faCopy } from '@fortawesome/free-solid-svg-icons'
 interface ReceiveModalProps {
   isOpen: boolean
   onClose: () => void
+  walletAddress: string
   onShowNotification: (message: string) => void
 }
 
-const ReceiveModal: React.FC<ReceiveModalProps> = ({ isOpen, onClose, onShowNotification }) => {
-  const walletAddress = '0x742d35Cc6e15A2e1c2B3E8B3'
+const ReceiveModal: React.FC<ReceiveModalProps> = ({ 
+  isOpen, 
+  onClose, 
+  walletAddress, 
+  onShowNotification 
+}) => {
 
   if (!isOpen) return null
 

@@ -15,7 +15,12 @@
     "@fortawesome/fontawesome-svg-core": "^6.5.1",
     "@fortawesome/free-brands-svg-icons": "^6.5.1",
     "@fortawesome/free-solid-svg-icons": "^6.5.1",
-    "@fortawesome/react-fontawesome": "^0.2.0"
+    "@fortawesome/react-fontawesome": "^0.2.0",
+    "@alchemy/aa-alchemy": "^3.13.2",
+    "@alchemy/aa-accounts": "^3.13.2",
+    "@alchemy/aa-core": "^3.13.2",
+    "viem": "^2.9.31",
+    "ethers": "^6.13.4"
   },
   "devDependencies": {
     "@types/node": "^20",
