@@ -66,6 +66,21 @@ export default function Home() {
     }
   }
 
+  // Wrapper function to adapt sendToken for SendModal component
+  const handleSendToken = async (tokenAddress: string, to: string, amount: string, decimals: number) => {
+    // Get token symbol from tokenBalances if available, otherwise use a default
+    const token = tokenBalances.find(t => t.contractAddress?.toLowerCase() === tokenAddress.toLowerCase())
+    const symbol = token?.symbol || 'TOKEN'
+    
+    return await sendToken({
+      tokenAddress,
+      symbol,
+      to,
+      amount,
+      decimals
+    })
+  }
+
   const showNotification = (message: string) => {
     setNotification({ message, isVisible: true })
   }
@@ -119,7 +134,7 @@ export default function Home() {
           isOpen={showSendModal}
           onClose={() => setShowSendModal(false)}
           onSend={sendNativeToken}
-          onSendToken={sendToken}
+          onSendToken={handleSendToken}
           onShowNotification={showNotification}
         />
 
