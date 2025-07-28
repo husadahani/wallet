@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import alchemyWallet, { WalletInfo, TokenBalance, TransactionResult } from '../services/alchemyWallet'
+import alchemyWallet, { WalletInfo, TokenBalance, TransactionResult, NetworkConfig } from '../services/alchemyWallet'
 import socialAuth, { UserProfile } from '../services/socialAuth'
 
 export interface WalletState {
@@ -9,6 +9,8 @@ export interface WalletState {
   tokenBalances: TokenBalance[]
   user: UserProfile | null
   error: string | null
+  currentNetwork: NetworkConfig | null
+  supportedNetworks: Record<string, NetworkConfig>
 }
 
 export function useAlchemyWallet() {
@@ -19,6 +21,8 @@ export function useAlchemyWallet() {
     tokenBalances: [],
     user: null,
     error: null,
+    currentNetwork: null,
+    supportedNetworks: alchemyWallet.getSupportedNetworks(),
   })
 
   // Check for existing session on mount
@@ -43,6 +47,7 @@ export function useAlchemyWallet() {
         walletInfo,
         tokenBalances,
         user,
+        currentNetwork: walletInfo.network,
       }))
     } catch (error) {
       setState(prev => ({
@@ -85,6 +90,34 @@ export function useAlchemyWallet() {
     }
   }
 
+  const switchNetwork = async (networkKey: string) => {
+    setState(prev => ({ ...prev, isLoading: true, error: null }))
+    
+    try {
+      await alchemyWallet.switchNetwork(networkKey)
+      
+      // Refresh wallet info and balances for new network
+      if (state.user) {
+        const walletInfo = await alchemyWallet.initializeWallet(state.user.privateKey)
+        const tokenBalances = await alchemyWallet.getTokenBalances()
+        
+        setState(prev => ({
+          ...prev,
+          isLoading: false,
+          walletInfo,
+          tokenBalances,
+          currentNetwork: walletInfo.network,
+        }))
+      }
+    } catch (error) {
+      setState(prev => ({
+        ...prev,
+        isLoading: false,
+        error: error instanceof Error ? error.message : 'Failed to switch network',
+      }))
+    }
+  }
+
   const logout = () => {
     socialAuth.clearUserSession()
     alchemyWallet.disconnect()
@@ -95,6 +128,8 @@ export function useAlchemyWallet() {
       tokenBalances: [],
       user: null,
       error: null,
+      currentNetwork: null,
+      supportedNetworks: alchemyWallet.getSupportedNetworks(),
     })
   }
 
@@ -115,13 +150,13 @@ export function useAlchemyWallet() {
     }
   }
 
-  const sendETH = async (to: string, amount: string): Promise<TransactionResult> => {
+  const sendNativeToken = async (to: string, amount: string): Promise<TransactionResult> => {
     if (!state.isConnected) {
       throw new Error('Wallet not connected')
     }
     
     try {
-      const result = await alchemyWallet.sendETH(to as `0x${string}`, amount)
+      const result = await alchemyWallet.sendNativeToken(to, amount)
       if (result.success) {
         // Refresh balance after successful transaction
         await refreshBalance()
@@ -144,8 +179,8 @@ export function useAlchemyWallet() {
     
     try {
       const result = await alchemyWallet.sendToken(
-        tokenAddress as `0x${string}`,
-        to as `0x${string}`,
+        tokenAddress,
+        to,
         amount,
         decimals
       )
@@ -164,8 +199,9 @@ export function useAlchemyWallet() {
     loginWithGoogle,
     loginWithFacebook,
     logout,
+    switchNetwork,
     refreshBalance,
-    sendETH,
+    sendNativeToken,
     sendToken,
   }
 }

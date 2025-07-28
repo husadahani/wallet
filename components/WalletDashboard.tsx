@@ -23,11 +23,14 @@ interface Token {
   decimals: number
 }
 
+import { NetworkConfig } from '../services/alchemyWallet'
+
 interface WalletDashboardProps {
   userName: string
   walletAddress: string
   balance: string
   isDeployed: boolean
+  currentNetwork: NetworkConfig | null
   tokenBalances: Array<{
     symbol: string
     balance: string
@@ -39,6 +42,7 @@ interface WalletDashboardProps {
   onShowReceiveModal: () => void
   onShowNotification: (message: string) => void
   onRefreshBalance: () => void
+  networkSelector?: React.ReactNode
 }
 
 const WalletDashboard: React.FC<WalletDashboardProps> = ({
@@ -46,12 +50,14 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
   walletAddress,
   balance,
   isDeployed,
+  currentNetwork,
   tokenBalances,
   onLogout,
   onShowSendModal,
   onShowReceiveModal,
   onShowNotification,
-  onRefreshBalance
+  onRefreshBalance,
+  networkSelector
 }) => {
   const [tokens, setTokens] = useState<Token[]>([])
   const displayAddress = walletAddress ? `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}` : ''
@@ -106,12 +112,15 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
               <h1 className="text-2xl font-bold">Halo, {userName}!</h1>
               <p className="text-blue-100">Selamat datang kembali</p>
             </div>
-            <button 
-              onClick={onLogout}
-              className="p-2 hover:bg-white hover:bg-opacity-20 rounded-lg transition-colors"
-            >
-              <FontAwesomeIcon icon={faSignOutAlt} className="text-xl" />
-            </button>
+            <div className="flex items-center space-x-2">
+              {networkSelector}
+              <button 
+                onClick={onLogout}
+                className="p-2 hover:bg-white hover:bg-opacity-20 rounded-lg transition-colors"
+              >
+                <FontAwesomeIcon icon={faSignOutAlt} className="text-xl" />
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -122,7 +131,9 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
           <div className="flex justify-between items-start mb-4">
             <div>
               <h3 className="text-lg font-semibold text-gray-800 dark:text-white">Smart Wallet</h3>
-              <p className="text-sm text-gray-500 dark:text-gray-400">Sepolia Testnet</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                {currentNetwork?.name || 'Unknown Network'}
+              </p>
             </div>
             <div className={`px-3 py-1 rounded-full text-sm font-medium ${
               isDeployed 

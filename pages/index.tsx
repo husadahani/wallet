@@ -5,6 +5,7 @@ import WalletDashboard from '../components/WalletDashboard'
 import SendModal from '../components/SendModal'
 import ReceiveModal from '../components/ReceiveModal'
 import Notification from '../components/Notification'
+import NetworkSelector from '../components/NetworkSelector'
 import { useDarkMode } from '../hooks/useDarkMode'
 import { useAlchemyWallet } from '../hooks/useAlchemyWallet'
 
@@ -24,11 +25,14 @@ export default function Home() {
     tokenBalances,
     user,
     error,
+    currentNetwork,
+    supportedNetworks,
     loginWithGoogle,
     loginWithFacebook,
     logout,
+    switchNetwork,
     refreshBalance,
-    sendETH,
+    sendNativeToken,
     sendToken,
   } = useAlchemyWallet()
 
@@ -50,6 +54,16 @@ export default function Home() {
 
   const handleLogout = () => {
     logout()
+  }
+
+  const handleNetworkSwitch = async (networkKey: string) => {
+    try {
+      await switchNetwork(networkKey)
+      const networkName = supportedNetworks[networkKey]?.name || networkKey
+      showNotification(`Switched to ${networkName}`)
+    } catch (error) {
+      showNotification('Failed to switch network')
+    }
   }
 
   const showNotification = (message: string) => {
@@ -83,19 +97,28 @@ export default function Home() {
             walletAddress={walletInfo?.address || ''}
             balance={walletInfo?.balance || '0'}
             isDeployed={walletInfo?.isDeployed || false}
+            currentNetwork={currentNetwork}
             tokenBalances={tokenBalances}
             onLogout={handleLogout}
             onShowSendModal={() => setShowSendModal(true)}
             onShowReceiveModal={() => setShowReceiveModal(true)}
             onShowNotification={showNotification}
             onRefreshBalance={refreshBalance}
+            networkSelector={
+              <NetworkSelector
+                currentNetwork={currentNetwork}
+                supportedNetworks={supportedNetworks}
+                onNetworkChange={handleNetworkSwitch}
+                isLoading={isLoading}
+              />
+            }
           />
         )}
 
         <SendModal
           isOpen={showSendModal}
           onClose={() => setShowSendModal(false)}
-          onSend={sendETH}
+          onSend={sendNativeToken}
           onSendToken={sendToken}
           onShowNotification={showNotification}
         />
