@@ -1,64 +1,66 @@
 import React, { useState } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faTimes } from '@fortawesome/free-solid-svg-icons'
-import { TransactionResult } from '../services/alchemyWallet'
+import { faTimes, faFire, faCoins, faDollarSign } from '@fortawesome/free-solid-svg-icons'
+import { SendTokenOptions } from '../hooks/useAlchemyWallet'
+
+interface TokenBalance {
+  symbol: string
+  balance: string
+  contractAddress?: string
+  decimals: number
+}
 
 interface SendModalProps {
-  isOpen: boolean
+  walletAddress: string
+  tokenBalances: TokenBalance[]
+  isDeployed: boolean
+  gasManagerEnabled: boolean
   onClose: () => void
-  onSend: (to: string, amount: string) => Promise<TransactionResult>
-  onSendToken: (tokenAddress: string, to: string, amount: string, decimals: number) => Promise<TransactionResult>
-  onShowNotification: (message: string) => void
+  onSend: (data: SendTokenOptions) => Promise<any>
 }
 
 const SendModal: React.FC<SendModalProps> = ({ 
-  isOpen, 
+  walletAddress,
+  tokenBalances, 
+  isDeployed,
+  gasManagerEnabled,
   onClose, 
-  onSend, 
-  onSendToken, 
-  onShowNotification 
+  onSend
 }) => {
   const [recipient, setRecipient] = useState('')
   const [amount, setAmount] = useState('')
   const [isLoading, setIsLoading] = useState(false)
-  const [selectedToken, setSelectedToken] = useState('ETH')
-
-  if (!isOpen) return null
+  const [selectedToken, setSelectedToken] = useState(tokenBalances[0]?.symbol || 'BNB')
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
     if (!recipient || !amount) {
-      onShowNotification('Mohon isi semua field')
+      return
+    }
+
+    if (!isDeployed) {
       return
     }
 
     setIsLoading(true)
     
     try {
-      let result: TransactionResult
+      const selectedTokenData = tokenBalances.find(token => token.symbol === selectedToken)
       
-      if (selectedToken === 'ETH') {
-        result = await onSend(recipient, amount)
-      } else {
-        // For other tokens, you would need token contract addresses
-        // This is a placeholder for token sending
-        onShowNotification('Token sending belum tersedia')
-        setIsLoading(false)
-        return
+      const sendData: SendTokenOptions = {
+        to: recipient,
+        amount: amount,
+        tokenAddress: selectedTokenData?.contractAddress,
+        symbol: selectedToken,
+        decimals: selectedTokenData?.decimals || 18
       }
 
-      if (result.success) {
-        const hashText = result.hash ? `Hash: ${result.hash.slice(0, 10)}...` : 'Berhasil!'
-        onShowNotification(`Transaksi berhasil! ${hashText}`)
-        setRecipient('')
-        setAmount('')
-        onClose()
-      } else {
-        onShowNotification(`Transaksi gagal: ${result.error}`)
-      }
+      await onSend(sendData)
+      setRecipient('')
+      setAmount('')
     } catch (error) {
-      onShowNotification(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      console.error('Send error:', error)
     } finally {
       setIsLoading(false)
     }
@@ -69,6 +71,37 @@ const SendModal: React.FC<SendModalProps> = ({
       onClose()
     }
   }
+
+  const getTokenIcon = (symbol: string) => {
+    switch (symbol.toUpperCase()) {
+      case 'BNB':
+        return faFire
+      case 'USDT':
+      case 'USDC':
+      case 'BUSD':
+        return faDollarSign
+      default:
+        return faCoins
+    }
+  }
+
+  const getTokenColor = (symbol: string) => {
+    switch (symbol.toUpperCase()) {
+      case 'BNB':
+        return 'text-yellow-500'
+      case 'USDT':
+        return 'text-green-500'
+      case 'USDC':
+        return 'text-blue-500'
+      case 'BUSD':
+        return 'text-yellow-600'
+      default:
+        return 'text-gray-500'
+    }
+  }
+
+  const selectedTokenData = tokenBalances.find(token => token.symbol === selectedToken)
+  const maxAmount = selectedTokenData ? parseFloat(selectedTokenData.balance) : 0
 
   return (
     <div 
@@ -86,6 +119,22 @@ const SendModal: React.FC<SendModalProps> = ({
               <FontAwesomeIcon icon={faTimes} className="text-xl" />
             </button>
           </div>
+
+          {!isDeployed && (
+            <div className="mb-4 p-4 bg-yellow-100 dark:bg-yellow-900 rounded-xl">
+              <p className="text-yellow-800 dark:text-yellow-200 text-sm">
+                ⚠️ Smart Wallet belum di-deploy. Deploy terlebih dahulu untuk mengirim token.
+              </p>
+            </div>
+          )}
+
+          {gasManagerEnabled && (
+            <div className="mb-4 p-3 bg-green-100 dark:bg-green-900 rounded-xl">
+              <p className="text-green-800 dark:text-green-200 text-sm flex items-center">
+                ⚡ Gas Manager aktif - Transaksi gratis!
+              </p>
+            </div>
+          )}
           
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
@@ -96,10 +145,24 @@ const SendModal: React.FC<SendModalProps> = ({
                 value={selectedToken}
                 onChange={(e) => setSelectedToken(e.target.value)}
                 className="w-full p-4 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-800 dark:text-white text-base focus:ring-2 focus:ring-primary focus:border-transparent"
+                disabled={isLoading || !isDeployed}
               >
-                <option value="ETH">ETH</option>
-                {/* Add more tokens as needed */}
+                {tokenBalances.map((token) => (
+                  <option key={token.symbol} value={token.symbol}>
+                    {token.symbol} - {parseFloat(token.balance).toFixed(4)} available
+                  </option>
+                ))}
               </select>
+              
+              {selectedTokenData && (
+                <div className="mt-2 flex items-center space-x-2 text-sm text-gray-600 dark:text-gray-400">
+                  <FontAwesomeIcon 
+                    icon={getTokenIcon(selectedToken)} 
+                    className={getTokenColor(selectedToken)} 
+                  />
+                  <span>Balance: {parseFloat(selectedTokenData.balance).toFixed(4)} {selectedToken}</span>
+                </div>
+              )}
             </div>
 
             <div>
@@ -113,14 +176,26 @@ const SendModal: React.FC<SendModalProps> = ({
                 onChange={(e) => setRecipient(e.target.value)}
                 className="w-full p-4 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-800 dark:text-white text-base focus:ring-2 focus:ring-primary focus:border-transparent"
                 required
-                disabled={isLoading}
+                disabled={isLoading || !isDeployed}
               />
             </div>
             
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Jumlah ({selectedToken})
-              </label>
+              <div className="flex justify-between items-center mb-2">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Jumlah ({selectedToken})
+                </label>
+                {selectedTokenData && (
+                  <button
+                    type="button"
+                    onClick={() => setAmount(selectedTokenData.balance)}
+                    className="text-xs text-primary hover:text-primary-dark"
+                    disabled={isLoading || !isDeployed}
+                  >
+                    Max
+                  </button>
+                )}
+              </div>
               <input 
                 type="number" 
                 placeholder="0.00" 
@@ -128,20 +203,32 @@ const SendModal: React.FC<SendModalProps> = ({
                 onChange={(e) => setAmount(e.target.value)}
                 step="any"
                 min="0"
+                max={maxAmount}
                 className="w-full p-4 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-800 dark:text-white text-base focus:ring-2 focus:ring-primary focus:border-transparent"
                 required
-                disabled={isLoading}
+                disabled={isLoading || !isDeployed}
               />
             </div>
             
             <button 
               type="submit"
-              disabled={isLoading}
+              disabled={isLoading || !isDeployed || !recipient || !amount}
               className="w-full bg-primary text-white py-4 px-6 rounded-xl font-medium hover:bg-primary-dark transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isLoading ? 'Mengirim...' : `Kirim ${selectedToken}`}
+              {isLoading ? 'Mengirim...' : 
+               !isDeployed ? 'Wallet Belum Di-deploy' :
+               `Kirim ${selectedToken}`}
             </button>
           </form>
+
+          <div className="mt-4 text-center">
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              From: {walletAddress.slice(0, 6)}...{walletAddress.slice(-4)}
+            </p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              Network: BNB Smart Chain
+            </p>
+          </div>
         </div>
       </div>
     </div>

@@ -9,20 +9,18 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "@alchemy/aa-accounts": "^3.13.2",
     "@alchemy/aa-alchemy": "^3.19.0",
-    "@alchemy/aa-core": "^3.13.2",
+    "@alchemy/aa-core": "^3.19.0",
+    "@alchemy/aa-accounts": "^3.19.0",
+    "@alchemy/aa-signers": "^3.19.0",
     "@fortawesome/fontawesome-svg-core": "^6.5.1",
     "@fortawesome/free-brands-svg-icons": "^6.5.1",
     "@fortawesome/free-solid-svg-icons": "^6.5.1",
     "@fortawesome/react-fontawesome": "^0.2.0",
-    "@turnkey/sdk-browser": "^5.3.4",
-    "@turnkey/viem": "^0.9.10",
-    "ethers": "^6.13.4",
     "next": "14.0.4",
     "react": "^18",
     "react-dom": "^18",
-    "viem": "^1.21.4"
+    "viem": "^2.5.0"
   },
   "devDependencies": {
     "@types/node": "^20",
