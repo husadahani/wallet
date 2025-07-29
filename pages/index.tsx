@@ -26,14 +26,12 @@ export default function Home() {
     currentNetwork,
     gasManagerEnabled,
     smartAccountDeployed,
-    loginWithGoogle,
-    loginWithFacebook,
-    loginWithTwitter,
-    loginWithEmail,
+    authenticateWithGoogle,
+    authenticateWithFacebook,
+    authenticateWithEmail,
     logout,
     sendToken,
-    refreshBalance,
-    deploySmartAccount
+    refreshWalletData
   } = useAlchemyWallet()
 
   const showNotification = (message: string) => {
@@ -58,10 +56,9 @@ export default function Home() {
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
         {!isConnected ? (
           <LoginScreen
-            onGoogleLogin={loginWithGoogle}
-            onFacebookLogin={loginWithFacebook}
-            onTwitterLogin={loginWithTwitter}
-            onEmailLogin={loginWithEmail}
+            onGoogleLogin={authenticateWithGoogle}
+            onFacebookLogin={authenticateWithFacebook}
+            onEmailLogin={authenticateWithEmail}
             isLoading={isLoading}
             loadingMessage={loadingMessage}
           />
@@ -78,7 +75,7 @@ export default function Home() {
             onShowSendModal={() => setShowSendModal(true)}
             onShowReceiveModal={() => setShowReceiveModal(true)}
             onShowNotification={showNotification}
-            onRefreshBalance={refreshBalance}
+            onRefreshBalance={refreshWalletData}
           />
         )}
 
@@ -92,10 +89,10 @@ export default function Home() {
               try {
                 const result = await sendToken(data)
                 if (result.success) {
-                  showNotification(`Transaksi berhasil! Hash: ${result.transactionHash?.slice(0, 10)}...`)
+                  showNotification(`Transaksi berhasil! Hash: ${result.hash?.slice(0, 10)}...`)
                   setShowSendModal(false)
                   // Auto refresh balance after successful transaction
-                  setTimeout(() => refreshBalance(), 2000)
+                  setTimeout(() => refreshWalletData(), 2000)
                 } else {
                   showNotification(`Transaksi gagal: ${result.error}`)
                 }
@@ -121,7 +118,7 @@ export default function Home() {
         <Notification
           message={notification.message}
           isVisible={notification.isVisible}
-          onClose={() => setNotification({ message: '', isVisible: false })}
+          onHide={() => setNotification({ message: '', isVisible: false })}
         />
 
         {/* Error Display */}
@@ -131,20 +128,14 @@ export default function Home() {
           </div>
         )}
 
-        {/* Deploy Prompt */}
+        {/* Deploy Status */}
         {isConnected && !smartAccountDeployed && !isLoading && (
-          <div className="fixed bottom-4 left-4 right-4 bg-yellow-500 text-white px-4 py-3 rounded-lg shadow-lg max-w-md mx-auto">
+          <div className="fixed bottom-4 left-4 right-4 bg-blue-500 text-white px-4 py-3 rounded-lg shadow-lg max-w-md mx-auto">
             <div className="flex justify-between items-center">
               <div>
-                <p className="font-medium">Smart Wallet belum di-deploy</p>
-                <p className="text-sm opacity-90">Deploy untuk mulai bertransaksi</p>
+                <p className="font-medium">Smart Wallet sedang di-setup</p>
+                <p className="text-sm opacity-90">Deployment otomatis saat transaksi pertama</p>
               </div>
-              <button
-                onClick={deploySmartAccount}
-                className="bg-white text-yellow-600 px-3 py-1 rounded font-medium hover:bg-gray-100 transition-colors"
-              >
-                Deploy
-              </button>
             </div>
           </div>
         )}

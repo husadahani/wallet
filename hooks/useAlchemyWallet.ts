@@ -409,7 +409,7 @@ export function useAlchemyWallet() {
         to,
         value: amount || '0',
         chainId: state.currentNetwork.chainId,
-        operation: tokenAddress ? 'token_transfer' : 'transfer'
+        operation: (tokenAddress ? 'token_transfer' : 'transfer') as 'transfer' | 'token_transfer'
       }
 
       return await gasManager.estimateGas(request)
@@ -435,7 +435,7 @@ export function useAlchemyWallet() {
         to,
         value: amount || '0',
         chainId: state.currentNetwork.chainId,
-        operation: tokenAddress ? 'token_transfer' : 'transfer'
+        operation: (tokenAddress ? 'token_transfer' : 'transfer') as 'transfer' | 'token_transfer'
       }
 
       return await gasManager.checkSponsorshipEligibility(request)
@@ -461,7 +461,7 @@ export function useAlchemyWallet() {
         to,
         value: amount || '0',
         chainId: state.currentNetwork.chainId,
-        operation: tokenAddress ? 'token_transfer' : 'transfer'
+        operation: (tokenAddress ? 'token_transfer' : 'transfer') as 'transfer' | 'token_transfer'
       }
 
       return await gasManager.getGasOptimizations(request)

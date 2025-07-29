@@ -212,19 +212,19 @@ class AlchemyGasManagerService {
         return {
           slow: {
             maxFeePerGas: baseGasPrice.toString(),
-            maxPriorityFeePerGas: (baseGasPrice / 2n).toString(),
+            maxPriorityFeePerGas: (baseGasPrice / BigInt(2)).toString(),
             estimatedTime: '30-60 seconds',
             confidence: 95
           },
           standard: {
-            maxFeePerGas: (baseGasPrice * 2n).toString(),
+            maxFeePerGas: (baseGasPrice * BigInt(2)).toString(),
             maxPriorityFeePerGas: baseGasPrice.toString(),
             estimatedTime: '15-30 seconds',
             confidence: 98
           },
           fast: {
-            maxFeePerGas: (baseGasPrice * 4n).toString(),
-            maxPriorityFeePerGas: (baseGasPrice * 2n).toString(),
+            maxFeePerGas: (baseGasPrice * BigInt(4)).toString(),
+            maxPriorityFeePerGas: (baseGasPrice * BigInt(2)).toString(),
             estimatedTime: '5-15 seconds',
             confidence: 99
           }
@@ -237,18 +237,18 @@ class AlchemyGasManagerService {
       return {
         slow: {
           maxFeePerGas: baseGasPrice.toString(),
-          maxPriorityFeePerGas: (baseGasPrice / 4n).toString(),
+          maxPriorityFeePerGas: (baseGasPrice / BigInt(4)).toString(),
           estimatedTime: '2-5 minutes',
           confidence: 90
         },
         standard: {
-          maxFeePerGas: (baseGasPrice * 2n).toString(),
-          maxPriorityFeePerGas: (baseGasPrice / 2n).toString(),
+          maxFeePerGas: (baseGasPrice * BigInt(2)).toString(),
+          maxPriorityFeePerGas: (baseGasPrice / BigInt(2)).toString(),
           estimatedTime: '30-90 seconds',
           confidence: 95
         },
         fast: {
-          maxFeePerGas: (baseGasPrice * 4n).toString(),
+          maxFeePerGas: (baseGasPrice * BigInt(4)).toString(),
           maxPriorityFeePerGas: baseGasPrice.toString(),
           estimatedTime: '15-30 seconds',
           confidence: 99
@@ -261,19 +261,19 @@ class AlchemyGasManagerService {
       return {
         slow: {
           maxFeePerGas: defaultGasPrice.toString(),
-          maxPriorityFeePerGas: (defaultGasPrice / 2n).toString(),
+          maxPriorityFeePerGas: (defaultGasPrice / BigInt(2)).toString(),
           estimatedTime: '60+ seconds',
           confidence: 85
         },
         standard: {
-          maxFeePerGas: (defaultGasPrice * 2n).toString(),
+          maxFeePerGas: (defaultGasPrice * BigInt(2)).toString(),
           maxPriorityFeePerGas: defaultGasPrice.toString(),
           estimatedTime: '30-60 seconds',
           confidence: 95
         },
         fast: {
-          maxFeePerGas: (defaultGasPrice * 3n).toString(),
-          maxPriorityFeePerGas: (defaultGasPrice * 2n).toString(),
+          maxFeePerGas: (defaultGasPrice * BigInt(3)).toString(),
+          maxPriorityFeePerGas: (defaultGasPrice * BigInt(2)).toString(),
           estimatedTime: '15-30 seconds',
           confidence: 98
         }

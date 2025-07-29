@@ -1,12 +1,11 @@
 import React, { useState } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faWallet, faEnvelope } from '@fortawesome/free-solid-svg-icons'
-import { faFacebookF, faTwitter, faGoogle } from '@fortawesome/free-brands-svg-icons'
+import { faFacebookF, faGoogle } from '@fortawesome/free-brands-svg-icons'
 
 interface LoginScreenProps {
   onGoogleLogin: () => void
   onFacebookLogin: () => void
-  onTwitterLogin: () => void
   onEmailLogin: (email: string) => void
   isLoading: boolean
   loadingMessage: string
@@ -15,7 +14,6 @@ interface LoginScreenProps {
 const LoginScreen: React.FC<LoginScreenProps> = ({
   onGoogleLogin,
   onFacebookLogin,
-  onTwitterLogin,
   onEmailLogin,
   isLoading,
   loadingMessage
@@ -69,15 +67,6 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
           >
             <FontAwesomeIcon icon={faFacebookF} className="text-lg" />
             <span>Masuk dengan Facebook</span>
-          </button>
-
-          {/* Twitter Login */}
-          <button
-            onClick={onTwitterLogin}
-            className="w-full bg-black dark:bg-gray-900 text-white py-3 px-6 rounded-xl font-medium hover:bg-gray-800 dark:hover:bg-gray-700 transition-all duration-200 flex items-center justify-center space-x-3"
-          >
-            <FontAwesomeIcon icon={faTwitter} className="text-lg" />
-            <span>Masuk dengan Twitter</span>
           </button>
 
           {/* Email Login Toggle */}
