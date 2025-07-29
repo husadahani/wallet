@@ -1,8 +1,9 @@
 import { createModularAccountAlchemyClient } from '@alchemy/aa-alchemy'
 import { ModularAccount } from '@alchemy/aa-accounts'
 import { AlchemySigner } from '@alchemy/aa-signers'
-import { createPublicClient, http, parseEther, formatEther, Address } from 'viem'
-import { bsc } from 'viem/chains'
+import { createPublicClient, http, parseEther, formatEther, Address, parseUnits, formatUnits } from 'viem'
+import { bsc, sepolia, mainnet, polygon } from 'viem/chains'
+import axios from 'axios'
 
 export interface NetworkConfig {
   chainId: number
@@ -29,6 +30,16 @@ export interface TokenBalance {
   contractAddress?: string
   decimals: number
   usdValue?: number
+  isCustomToken?: boolean
+}
+
+export interface CustomToken {
+  address: string
+  symbol: string
+  decimals: number
+  name: string
+  logoURI?: string
+  verified: boolean
 }
 
 export interface TransactionResult {
@@ -48,15 +59,47 @@ export interface SendTokenOptions {
   decimals?: number
 }
 
-// BNB Smart Chain Mainnet Configuration with Alchemy
+// BNB Smart Chain Mainnet Configuration (PRIMARY NETWORK)
 export const BNB_MAINNET_CONFIG: NetworkConfig = {
   chainId: 56,
   name: 'BNB Smart Chain',
   symbol: 'BNB',
   rpcUrl: process.env.NEXT_PUBLIC_BNB_RPC_URL || `https://bnb-mainnet.g.alchemy.com/v2/${process.env.NEXT_PUBLIC_ALCHEMY_API_KEY}`,
-  gasPolicy: process.env.NEXT_PUBLIC_BNB_GAS_POLICY_ID,
+  gasPolicy: process.env.NEXT_PUBLIC_BNB_MAINNET_GAS_POLICY_ID,
   chain: bsc,
   explorer: 'https://bscscan.com'
+}
+
+// Secondary networks for optional multi-chain support
+export const SUPPORTED_NETWORKS: { [key: string]: NetworkConfig } = {
+  bnb_mainnet: BNB_MAINNET_CONFIG,
+  sepolia: {
+    chainId: 11155111,
+    name: 'Ethereum Sepolia',
+    symbol: 'ETH',
+    rpcUrl: process.env.NEXT_PUBLIC_ETH_SEPOLIA_RPC_URL || `https://eth-sepolia.g.alchemy.com/v2/${process.env.NEXT_PUBLIC_ALCHEMY_API_KEY}`,
+    gasPolicy: process.env.NEXT_PUBLIC_ETH_SEPOLIA_GAS_POLICY_ID,
+    chain: sepolia,
+    explorer: 'https://sepolia.etherscan.io'
+  },
+  eth_mainnet: {
+    chainId: 1,
+    name: 'Ethereum',
+    symbol: 'ETH',
+    rpcUrl: process.env.NEXT_PUBLIC_ETH_MAINNET_RPC_URL || `https://eth-mainnet.g.alchemy.com/v2/${process.env.NEXT_PUBLIC_ALCHEMY_API_KEY}`,
+    gasPolicy: process.env.NEXT_PUBLIC_ETH_MAINNET_GAS_POLICY_ID,
+    chain: mainnet,
+    explorer: 'https://etherscan.io'
+  },
+  polygon: {
+    chainId: 137,
+    name: 'Polygon',
+    symbol: 'MATIC',
+    rpcUrl: process.env.NEXT_PUBLIC_POLYGON_MAINNET_RPC_URL || `https://polygon-mainnet.g.alchemy.com/v2/${process.env.NEXT_PUBLIC_ALCHEMY_API_KEY}`,
+    gasPolicy: process.env.NEXT_PUBLIC_POLYGON_MAINNET_GAS_POLICY_ID,
+    chain: polygon,
+    explorer: 'https://polygonscan.com'
+  }
 }
 
 class AlchemyWalletService {
@@ -65,8 +108,10 @@ class AlchemyWalletService {
   private smartAccount: ModularAccount | null = null
   private currentNetwork: NetworkConfig = BNB_MAINNET_CONFIG
   private isInitialized: boolean = false
+  private customTokens: CustomToken[] = []
+  private userInfo: any = null
 
-  // Initialize Alchemy Signer with embedded accounts
+  // Initialize Alchemy Signer with embedded accounts for social login
   private async initializeAlchemySigner(): Promise<AlchemySigner> {
     if (this.alchemySigner) {
       return this.alchemySigner
@@ -99,7 +144,7 @@ class AlchemyWalletService {
     }
   }
 
-  // Create Modular Account with Alchemy services
+  // Create Modular Account with Alchemy services and gas sponsorship
   private async createModularAccount(signer: AlchemySigner) {
     try {
       const alchemyApiKey = process.env.NEXT_PUBLIC_ALCHEMY_API_KEY
@@ -116,7 +161,7 @@ class AlchemyWalletService {
           policyId: this.currentNetwork.gasPolicy,
         } : undefined,
         accountParams: {
-          // Optional: specify account salt for deterministic addresses
+          // Deterministic addresses with salt
           salt: BigInt(0),
         },
       })
@@ -129,6 +174,10 @@ class AlchemyWalletService {
       console.log('⛽ Gas sponsorship enabled:', !!this.currentNetwork.gasPolicy)
 
       this.isInitialized = true
+      
+      // Check if account needs deployment and create dummy transaction if needed
+      await this.ensureAccountDeployment(address)
+      
       return address
     } catch (error) {
       console.error('❌ Error creating modular account:', error)
@@ -136,9 +185,52 @@ class AlchemyWalletService {
     }
   }
 
-  // Authenticate with social login
+  // Ensure smart account is deployed with dummy transaction if needed
+  private async ensureAccountDeployment(address: string): Promise<void> {
+    try {
+      const publicClient = createPublicClient({
+        chain: this.currentNetwork.chain,
+        transport: http(this.currentNetwork.rpcUrl)
+      })
+      
+      // Check if account is deployed
+      const code = await publicClient.getBytecode({ address: address as Address })
+      const isDeployed = !!code && code !== '0x'
+
+      if (!isDeployed && process.env.NEXT_PUBLIC_DUMMY_TRANSACTION_ENABLED === 'true') {
+        console.log('🚀 Account not deployed, creating dummy transaction...')
+        
+        // Create a small dummy transaction to deploy the account
+        const dummyTx = await this.smartAccountClient.sendUserOperation({
+          uo: {
+            target: address as Address,
+            data: '0x',
+            value: parseEther('0.00001'), // Very small amount
+          },
+        })
+
+        console.log('⏳ Dummy transaction sent:', dummyTx.hash)
+        
+        // Wait for transaction to be mined
+        const receipt = await this.smartAccountClient.waitForUserOperationTransaction({
+          hash: dummyTx.hash
+        })
+        
+        console.log('✅ Smart account deployed with dummy transaction:', receipt.transactionHash)
+      } else if (isDeployed) {
+        console.log('✅ Smart account already deployed')
+      }
+    } catch (error) {
+      console.warn('⚠️ Could not deploy smart account with dummy transaction:', error)
+      // Don't throw error, deployment will happen on first transaction
+    }
+  }
+
+  // Authenticate with social login (Google, Facebook)
   async authenticateWithSocial(provider: 'google' | 'facebook' | 'twitter' | 'email' = 'google'): Promise<string> {
     try {
+      console.log(`🔐 Starting ${provider} authentication with Alchemy...`)
+      
       const signer = await this.initializeAlchemySigner()
       
       // Authenticate using Alchemy's embedded account system
@@ -149,15 +241,62 @@ class AlchemyWalletService {
       })
 
       console.log('🔐 User authenticated:', user)
+      this.userInfo = user
 
       // Create smart account after authentication
       const address = await this.createModularAccount(signer)
+      
+      // Load user's custom tokens
+      await this.loadCustomTokens()
       
       return address
     } catch (error) {
       console.error('Authentication failed:', error)
       throw new Error(`${provider} authentication failed`)
     }
+  }
+
+  // Switch to different network
+  async switchNetwork(networkKey: string): Promise<boolean> {
+    try {
+      const network = SUPPORTED_NETWORKS[networkKey]
+      if (!network) {
+        throw new Error(`Unsupported network: ${networkKey}`)
+      }
+
+      this.currentNetwork = network
+      
+      // Reinitialize with new network
+      if (this.alchemySigner) {
+        this.smartAccountClient = null
+        this.isInitialized = false
+        
+        // Recreate account client with new network
+        const address = await this.createModularAccount(this.alchemySigner)
+        console.log('🔄 Switched to network:', network.name)
+        return true
+      }
+      
+      return false
+    } catch (error) {
+      console.error('Network switch failed:', error)
+      return false
+    }
+  }
+
+  // Get current network info
+  getCurrentNetwork(): NetworkConfig {
+    return this.currentNetwork
+  }
+
+  // Get supported networks
+  getSupportedNetworks(): { [key: string]: NetworkConfig } {
+    return SUPPORTED_NETWORKS
+  }
+
+  // Get user information
+  getUserInfo(): any {
+    return this.userInfo
   }
 
   // Get wallet information
@@ -195,7 +334,7 @@ class AlchemyWalletService {
     }
   }
 
-  // Get token balances for BNB Smart Chain
+  // Get token balances including custom tokens
   async getTokenBalances(): Promise<TokenBalance[]> {
     if (!this.smartAccountClient) {
       return []
@@ -208,47 +347,40 @@ class AlchemyWalletService {
         transport: http(this.currentNetwork.rpcUrl)
       })
       
-      // Get native BNB balance
+      // Get native token balance
       const nativeBalance = await publicClient.getBalance({ address: address as Address })
       
       const balances: TokenBalance[] = [
         {
-          symbol: 'BNB',
+          symbol: this.currentNetwork.symbol,
           balance: formatEther(nativeBalance),
           decimals: 18,
           usdValue: 0 // Would fetch from price API in production
         }
       ]
 
-      // Add common BEP-20 tokens on BSC
-      const commonTokens = [
-        {
-          address: '0x55d398326f99059fF775485246999027B3197955',
-          symbol: 'USDT',
-          decimals: 18
-        },
-        {
-          address: '0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d',
-          symbol: 'USDC',
-          decimals: 18
-        },
-        {
-          address: '0xe9e7CEA3DedcA5984780Bafc599bD69ADd087D56',
-          symbol: 'BUSD',
-          decimals: 18
+      // Get common tokens based on network
+      const commonTokens = this.getCommonTokensForNetwork()
+      
+      // Get custom tokens
+      const allTokens = [...commonTokens, ...this.customTokens]
+      
+      // Fetch balances for all tokens
+      for (const token of allTokens) {
+        try {
+          const balance = await this.getTokenBalance(token.address, token.decimals, address)
+          balances.push({
+            symbol: token.symbol,
+            balance: balance,
+            contractAddress: token.address,
+            decimals: token.decimals,
+            usdValue: 0,
+            isCustomToken: this.customTokens.some(ct => ct.address === token.address)
+          })
+        } catch (error) {
+          // Skip tokens that fail to load
+          console.warn(`Failed to load balance for ${token.symbol}:`, error)
         }
-      ]
-
-      // In production, you would use Alchemy's Token API to fetch real balances
-      // For now, adding placeholder balances
-      for (const token of commonTokens) {
-        balances.push({
-          symbol: token.symbol,
-          balance: '0.0',
-          contractAddress: token.address,
-          decimals: token.decimals,
-          usdValue: 0
-        })
       }
 
       return balances
@@ -258,90 +390,326 @@ class AlchemyWalletService {
     }
   }
 
-  // Send native BNB
+  // Get common tokens for current network
+  private getCommonTokensForNetwork(): CustomToken[] {
+    switch (this.currentNetwork.chainId) {
+      case 56: // BNB Smart Chain
+        return [
+          {
+            address: '0x55d398326f99059fF775485246999027B3197955',
+            symbol: 'USDT',
+            decimals: 18,
+            name: 'Tether USD',
+            verified: true
+          },
+          {
+            address: '0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d',
+            symbol: 'USDC',
+            decimals: 18,
+            name: 'USD Coin',
+            verified: true
+          },
+          {
+            address: '0xe9e7CEA3DedcA5984780Bafc599bD69ADd087D56',
+            symbol: 'BUSD',
+            decimals: 18,
+            name: 'Binance USD',
+            verified: true
+          },
+          {
+            address: '0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82',
+            symbol: 'CAKE',
+            decimals: 18,
+            name: 'PancakeSwap Token',
+            verified: true
+          }
+        ]
+      case 1: // Ethereum Mainnet
+        return [
+          {
+            address: '0xA0b86a33E6441b3C3F7c429a6e7e476E15a6C44e',
+            symbol: 'USDC',
+            decimals: 6,
+            name: 'USD Coin',
+            verified: true
+          },
+          {
+            address: '0xdAC17F958D2ee523a2206206994597C13D831ec7',
+            symbol: 'USDT',
+            decimals: 6,
+            name: 'Tether USD',
+            verified: true
+          }
+        ]
+      default:
+        return []
+    }
+  }
+
+  // Get token balance using ERC20 interface
+  private async getTokenBalance(tokenAddress: string, decimals: number, walletAddress: string): Promise<string> {
+    const publicClient = createPublicClient({
+      chain: this.currentNetwork.chain,
+      transport: http(this.currentNetwork.rpcUrl)
+    })
+
+    try {
+      const balance = await publicClient.readContract({
+        address: tokenAddress as Address,
+        abi: [
+          {
+            constant: true,
+            inputs: [{ name: '_owner', type: 'address' }],
+            name: 'balanceOf',
+            outputs: [{ name: 'balance', type: 'uint256' }],
+            type: 'function',
+          },
+        ],
+        functionName: 'balanceOf',
+        args: [walletAddress as Address],
+      })
+
+      return formatUnits(balance as bigint, decimals)
+    } catch (error) {
+      console.warn(`Failed to get balance for token ${tokenAddress}:`, error)
+      return '0'
+    }
+  }
+
+  // Add custom token
+  async addCustomToken(tokenAddress: string): Promise<CustomToken | null> {
+    try {
+      // Validate token address format
+      if (!/^0x[a-fA-F0-9]{40}$/.test(tokenAddress)) {
+        throw new Error('Invalid token address format')
+      }
+
+      // Check if token already exists
+      if (this.customTokens.some(token => token.address.toLowerCase() === tokenAddress.toLowerCase())) {
+        throw new Error('Token already added')
+      }
+
+      // Get token information
+      const tokenInfo = await this.getTokenInfo(tokenAddress)
+      
+      if (!tokenInfo) {
+        throw new Error('Could not fetch token information')
+      }
+
+      // Add to custom tokens list
+      const customToken: CustomToken = {
+        address: tokenAddress,
+        symbol: tokenInfo.symbol,
+        decimals: tokenInfo.decimals,
+        name: tokenInfo.name,
+        verified: false
+      }
+
+      this.customTokens.push(customToken)
+      
+      // Save to localStorage
+      this.saveCustomTokens()
+      
+      console.log('✅ Custom token added:', customToken)
+      return customToken
+    } catch (error) {
+      console.error('Failed to add custom token:', error)
+      throw error
+    }
+  }
+
+  // Get token information from contract
+  private async getTokenInfo(tokenAddress: string): Promise<{symbol: string, name: string, decimals: number} | null> {
+    const publicClient = createPublicClient({
+      chain: this.currentNetwork.chain,
+      transport: http(this.currentNetwork.rpcUrl)
+    })
+
+    try {
+      const [symbol, name, decimals] = await Promise.all([
+        publicClient.readContract({
+          address: tokenAddress as Address,
+          abi: [
+            {
+              constant: true,
+              inputs: [],
+              name: 'symbol',
+              outputs: [{ name: '', type: 'string' }],
+              type: 'function',
+            },
+          ],
+          functionName: 'symbol',
+        }),
+        publicClient.readContract({
+          address: tokenAddress as Address,
+          abi: [
+            {
+              constant: true,
+              inputs: [],
+              name: 'name',
+              outputs: [{ name: '', type: 'string' }],
+              type: 'function',
+            },
+          ],
+          functionName: 'name',
+        }),
+        publicClient.readContract({
+          address: tokenAddress as Address,
+          abi: [
+            {
+              constant: true,
+              inputs: [],
+              name: 'decimals',
+              outputs: [{ name: '', type: 'uint8' }],
+              type: 'function',
+            },
+          ],
+          functionName: 'decimals',
+        }),
+      ])
+
+      return {
+        symbol: symbol as string,
+        name: name as string,
+        decimals: decimals as number
+      }
+    } catch (error) {
+      console.error('Failed to get token info:', error)
+      return null
+    }
+  }
+
+  // Remove custom token
+  removeCustomToken(tokenAddress: string): boolean {
+    const index = this.customTokens.findIndex(token => 
+      token.address.toLowerCase() === tokenAddress.toLowerCase()
+    )
+    
+    if (index > -1) {
+      this.customTokens.splice(index, 1)
+      this.saveCustomTokens()
+      console.log('✅ Custom token removed:', tokenAddress)
+      return true
+    }
+    return false
+  }
+
+  // Get custom tokens
+  getCustomTokens(): CustomToken[] {
+    return this.customTokens
+  }
+
+  // Save custom tokens to localStorage
+  private saveCustomTokens(): void {
+    try {
+      const key = `custom_tokens_${this.currentNetwork.chainId}`
+      localStorage.setItem(key, JSON.stringify(this.customTokens))
+    } catch (error) {
+      console.warn('Failed to save custom tokens:', error)
+    }
+  }
+
+  // Load custom tokens from localStorage
+  private async loadCustomTokens(): Promise<void> {
+    try {
+      const key = `custom_tokens_${this.currentNetwork.chainId}`
+      const saved = localStorage.getItem(key)
+      if (saved) {
+        this.customTokens = JSON.parse(saved)
+        console.log('📦 Loaded custom tokens:', this.customTokens.length)
+      }
+    } catch (error) {
+      console.warn('Failed to load custom tokens:', error)
+      this.customTokens = []
+    }
+  }
+
+  // Send native token (BNB, ETH, etc.)
   async sendNativeToken(to: string, amount: string): Promise<TransactionResult> {
     if (!this.smartAccountClient) {
-      throw new Error('Wallet not initialized')
+      return { success: false, error: 'Wallet not initialized' }
     }
 
     try {
-      console.log('🚀 Sending BNB:', { to, amount })
+      const amountWei = parseEther(amount)
       
-      const result = await this.smartAccountClient.sendUserOperation({
+      const userOp = await this.smartAccountClient.sendUserOperation({
         uo: {
           target: to as Address,
           data: '0x',
-          value: parseEther(amount)
-        }
+          value: amountWei,
+        },
       })
 
-      console.log('✅ Transaction sent:', result.hash)
+      console.log('⏳ Native token transaction sent:', userOp.hash)
       
-      // Wait for transaction receipt
       const receipt = await this.smartAccountClient.waitForUserOperationTransaction({
-        hash: result.hash
+        hash: userOp.hash
       })
 
+      console.log('✅ Native token transaction confirmed:', receipt.transactionHash)
+      
       return {
         success: true,
         hash: receipt.transactionHash,
-        gasUsed: receipt.gasUsed?.toString() || '0',
-        gasFee: '0' // Gas sponsored by Alchemy
+        gasUsed: receipt.gasUsed?.toString(),
+        gasFee: receipt.effectiveGasPrice ? 
+          formatEther(receipt.effectiveGasPrice * receipt.gasUsed!) : undefined
       }
     } catch (error) {
-      console.error('Error sending BNB:', error)
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Transaction failed'
+      console.error('Native token transfer failed:', error)
+      return { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Transfer failed' 
       }
     }
   }
 
-  // Send BEP-20 tokens
+  // Send ERC20/BEP20 token
   async sendToken(options: SendTokenOptions): Promise<TransactionResult> {
     if (!this.smartAccountClient) {
-      throw new Error('Wallet not initialized')
+      return { success: false, error: 'Wallet not initialized' }
     }
 
-    const { tokenAddress, symbol, amount, to, decimals = 18 } = options
-
-    if (!tokenAddress) {
-      // If no token address, send native BNB
-      return this.sendNativeToken(to, amount)
+    if (!options.tokenAddress) {
+      return { success: false, error: 'Token address is required' }
     }
 
     try {
-      console.log('🪙 Sending token:', { symbol, amount, to })
+      const decimals = options.decimals || 18
+      const amountWei = parseUnits(options.amount, decimals)
       
-      // Create ERC-20 transfer data
-      const transferAmount = parseEther(amount) // Simplified - should use actual decimals
-      const transferData = `0xa9059cbb${to.slice(2).padStart(64, '0')}${transferAmount.toString(16).padStart(64, '0')}`
-
-      const result = await this.smartAccountClient.sendUserOperation({
+      // ERC20 transfer function data
+      const transferData = `0xa9059cbb${options.to.slice(2).padStart(64, '0')}${amountWei.toString(16).padStart(64, '0')}`
+      
+      const userOp = await this.smartAccountClient.sendUserOperation({
         uo: {
-          target: tokenAddress as Address,
-          data: transferData as `0x${string}`,
-          value: BigInt(0)
-        }
+          target: options.tokenAddress as Address,
+          data: transferData,
+          value: 0n,
+        },
       })
 
-      console.log('✅ Token transfer sent:', result.hash)
+      console.log('⏳ Token transaction sent:', userOp.hash)
       
       const receipt = await this.smartAccountClient.waitForUserOperationTransaction({
-        hash: result.hash
+        hash: userOp.hash
       })
 
+      console.log('✅ Token transaction confirmed:', receipt.transactionHash)
+      
       return {
         success: true,
         hash: receipt.transactionHash,
-        gasUsed: receipt.gasUsed?.toString() || '0',
-        gasFee: '0' // Gas sponsored by Alchemy
+        gasUsed: receipt.gasUsed?.toString(),
+        gasFee: receipt.effectiveGasPrice ? 
+          formatEther(receipt.effectiveGasPrice * receipt.gasUsed!) : undefined
       }
     } catch (error) {
-      console.error('Error sending token:', error)
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Token transfer failed'
+      console.error('Token transfer failed:', error)
+      return { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Transfer failed' 
       }
     }
   }
@@ -350,85 +718,28 @@ class AlchemyWalletService {
   async logout(): Promise<void> {
     try {
       if (this.alchemySigner) {
+        // Logout from Alchemy signer
         await this.alchemySigner.disconnect()
       }
       
+      // Clear state
       this.smartAccountClient = null
       this.alchemySigner = null
       this.smartAccount = null
       this.isInitialized = false
+      this.userInfo = null
       
-      console.log('✅ Logged out successfully')
+      console.log('✅ Logout successful')
     } catch (error) {
-      console.error('Error during logout:', error)
+      console.error('Logout error:', error)
     }
   }
 
-  // Get current network
-  getCurrentNetwork(): NetworkConfig {
-    return this.currentNetwork
-  }
-
-  // Check if wallet is connected
-  isWalletConnected(): boolean {
+  // Check if wallet is ready
+  isReady(): boolean {
     return this.isInitialized && !!this.smartAccountClient
-  }
-
-  // Get smart account address
-  getSmartAccountAddress(): string | null {
-    return this.smartAccountClient ? 
-      this.smartAccountClient.getAddress().catch(() => null) : null
-  }
-
-  // Get user information from Alchemy signer
-  async getUserInfo() {
-    if (!this.alchemySigner) {
-      return null
-    }
-
-    try {
-      const user = await this.alchemySigner.getUser()
-      return {
-        id: user.userId,
-        email: user.email,
-        address: await this.smartAccountClient?.getAddress(),
-        provider: 'alchemy'
-      }
-    } catch (error) {
-      console.error('Error getting user info:', error)
-      return null
-    }
-  }
-
-  // Health check for all Alchemy services
-  async healthCheck() {
-    try {
-      const apiKey = process.env.NEXT_PUBLIC_ALCHEMY_API_KEY
-      const appId = process.env.NEXT_PUBLIC_ALCHEMY_APP_ID
-      const gasPolicy = process.env.NEXT_PUBLIC_BNB_GAS_POLICY_ID
-
-      return {
-        status: 'healthy' as const,
-        alchemyApiKey: !!apiKey,
-        alchemyAppId: !!appId,
-        gasManagerEnabled: !!gasPolicy,
-        smartAccountReady: this.isWalletConnected(),
-        currentNetwork: this.currentNetwork.name,
-        chainId: this.currentNetwork.chainId
-      }
-    } catch (error) {
-      return {
-        status: 'unhealthy' as const,
-        alchemyApiKey: false,
-        alchemyAppId: false,
-        gasManagerEnabled: false,
-        smartAccountReady: false,
-        currentNetwork: this.currentNetwork.name,
-        chainId: this.currentNetwork.chainId,
-        error: error instanceof Error ? error.message : 'Unknown error'
-      }
-    }
   }
 }
 
-export default new AlchemyWalletService()
+const alchemyWallet = new AlchemyWalletService()
+export default alchemyWallet
