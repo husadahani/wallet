@@ -6,12 +6,16 @@ export interface UserProfile {
   email: string
   provider: 'google' | 'facebook' | 'twitter' | 'email' | 'alchemy'
   address: string
+  smartAccountAddress: string
+  network: string
+  chainId: number
 }
 
 export interface AuthenticationResult {
   success: boolean
   user?: UserProfile
   error?: string
+  isNewAccount?: boolean
 }
 
 class SocialAuthService {
@@ -20,27 +24,35 @@ class SocialAuthService {
   // Authenticate with Google using Alchemy Embedded Accounts
   async loginWithGoogle(): Promise<UserProfile> {
     try {
-      console.log('🔐 Starting Google authentication with Alchemy...')
+      console.log('🔐 Starting Google authentication with Alchemy Embedded Accounts...')
       
-      const address = await alchemyWallet.authenticateWithSocial('google')
+      // Use Alchemy wallet service for social authentication
+      const smartAccountAddress = await alchemyWallet.authenticateWithSocial('google')
       const userInfo = await alchemyWallet.getUserInfo()
+      const currentNetwork = alchemyWallet.getCurrentNetwork()
       
       if (!userInfo) {
         throw new Error('Failed to get user information after authentication')
       }
 
       const userProfile: UserProfile = {
-        id: userInfo.id || 'google_user',
-        name: userInfo.email?.split('@')[0] || 'Google User',
+        id: userInfo.userId || userInfo.id || 'google_user',
+        name: userInfo.name || userInfo.email?.split('@')[0] || 'Google User',
         email: userInfo.email || '',
         provider: 'google',
-        address: address
+        address: smartAccountAddress,
+        smartAccountAddress: smartAccountAddress,
+        network: currentNetwork.name,
+        chainId: currentNetwork.chainId
       }
       
       this.currentUser = userProfile
       this.storeUserSession(userProfile)
       
       console.log('✅ Google authentication successful:', userProfile)
+      console.log('🎯 Network:', currentNetwork.name)
+      console.log('💰 Smart Account:', smartAccountAddress)
+      
       return userProfile
     } catch (error) {
       console.error('❌ Google authentication failed:', error)
@@ -51,27 +63,35 @@ class SocialAuthService {
   // Authenticate with Facebook using Alchemy Embedded Accounts
   async loginWithFacebook(): Promise<UserProfile> {
     try {
-      console.log('🔐 Starting Facebook authentication with Alchemy...')
+      console.log('🔐 Starting Facebook authentication with Alchemy Embedded Accounts...')
       
-      const address = await alchemyWallet.authenticateWithSocial('facebook')
+      // Use Alchemy wallet service for social authentication
+      const smartAccountAddress = await alchemyWallet.authenticateWithSocial('facebook')
       const userInfo = await alchemyWallet.getUserInfo()
+      const currentNetwork = alchemyWallet.getCurrentNetwork()
       
       if (!userInfo) {
         throw new Error('Failed to get user information after authentication')
       }
 
       const userProfile: UserProfile = {
-        id: userInfo.id || 'facebook_user',
-        name: userInfo.email?.split('@')[0] || 'Facebook User',
+        id: userInfo.userId || userInfo.id || 'facebook_user',
+        name: userInfo.name || userInfo.email?.split('@')[0] || 'Facebook User',
         email: userInfo.email || '',
         provider: 'facebook',
-        address: address
+        address: smartAccountAddress,
+        smartAccountAddress: smartAccountAddress,
+        network: currentNetwork.name,
+        chainId: currentNetwork.chainId
       }
       
       this.currentUser = userProfile
       this.storeUserSession(userProfile)
       
       console.log('✅ Facebook authentication successful:', userProfile)
+      console.log('🎯 Network:', currentNetwork.name)
+      console.log('💰 Smart Account:', smartAccountAddress)
+      
       return userProfile
     } catch (error) {
       console.error('❌ Facebook authentication failed:', error)
@@ -79,61 +99,38 @@ class SocialAuthService {
     }
   }
 
-  // Authenticate with Twitter using Alchemy Embedded Accounts
-  async loginWithTwitter(): Promise<UserProfile> {
+  // Authenticate with email using Alchemy Embedded Accounts
+  async loginWithEmail(email: string): Promise<UserProfile> {
     try {
-      console.log('🔐 Starting Twitter authentication with Alchemy...')
+      console.log('🔐 Starting email authentication with Alchemy Embedded Accounts...')
       
-      const address = await alchemyWallet.authenticateWithSocial('twitter')
+      // Use Alchemy wallet service for email authentication
+      const smartAccountAddress = await alchemyWallet.authenticateWithSocial('email')
       const userInfo = await alchemyWallet.getUserInfo()
+      const currentNetwork = alchemyWallet.getCurrentNetwork()
       
       if (!userInfo) {
         throw new Error('Failed to get user information after authentication')
       }
 
       const userProfile: UserProfile = {
-        id: userInfo.id || 'twitter_user',
-        name: userInfo.email?.split('@')[0] || 'Twitter User',
-        email: userInfo.email || '',
-        provider: 'twitter',
-        address: address
-      }
-      
-      this.currentUser = userProfile
-      this.storeUserSession(userProfile)
-      
-      console.log('✅ Twitter authentication successful:', userProfile)
-      return userProfile
-    } catch (error) {
-      console.error('❌ Twitter authentication failed:', error)
-      throw new Error('Twitter authentication failed')
-    }
-  }
-
-  // Authenticate with Email using Alchemy Embedded Accounts
-  async loginWithEmail(): Promise<UserProfile> {
-    try {
-      console.log('🔐 Starting Email authentication with Alchemy...')
-      
-      const address = await alchemyWallet.authenticateWithSocial('email')
-      const userInfo = await alchemyWallet.getUserInfo()
-      
-      if (!userInfo) {
-        throw new Error('Failed to get user information after authentication')
-      }
-
-      const userProfile: UserProfile = {
-        id: userInfo.id || 'email_user',
-        name: userInfo.email?.split('@')[0] || 'Email User',
-        email: userInfo.email || '',
+        id: userInfo.userId || userInfo.id || email.replace('@', '_'),
+        name: userInfo.name || email.split('@')[0],
+        email: email,
         provider: 'email',
-        address: address
+        address: smartAccountAddress,
+        smartAccountAddress: smartAccountAddress,
+        network: currentNetwork.name,
+        chainId: currentNetwork.chainId
       }
       
       this.currentUser = userProfile
       this.storeUserSession(userProfile)
       
       console.log('✅ Email authentication successful:', userProfile)
+      console.log('🎯 Network:', currentNetwork.name)
+      console.log('💰 Smart Account:', smartAccountAddress)
+      
       return userProfile
     } catch (error) {
       console.error('❌ Email authentication failed:', error)
@@ -141,176 +138,244 @@ class SocialAuthService {
     }
   }
 
-  // Store user session securely
-  private storeUserSession(user: UserProfile): void {
-    if (typeof window !== 'undefined') {
-      const sessionData = {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        provider: user.provider,
-        address: user.address,
-        timestamp: Date.now()
-      }
-      
-      localStorage.setItem('alchemy_user_session', JSON.stringify(sessionData))
-      console.log('💾 User session stored successfully')
-    }
-  }
+  // Generic authentication method
+  async authenticate(provider: 'google' | 'facebook' | 'email', email?: string): Promise<AuthenticationResult> {
+    try {
+      let user: UserProfile
 
-  // Retrieve user session
-  getUserSession(): UserProfile | null {
-    if (typeof window !== 'undefined') {
-      const sessionData = localStorage.getItem('alchemy_user_session')
-      
-      if (sessionData) {
-        try {
-          const parsed = JSON.parse(sessionData)
-          
-          // Check if session is still valid (24 hours)
-          const isValid = Date.now() - parsed.timestamp < 24 * 60 * 60 * 1000
-          
-          if (isValid) {
-            this.currentUser = parsed
-            return parsed
-          } else {
-            console.log('🕒 Session expired, clearing...')
-            this.clearUserSession()
+      switch (provider) {
+        case 'google':
+          user = await this.loginWithGoogle()
+          break
+        case 'facebook':
+          user = await this.loginWithFacebook()
+          break
+        case 'email':
+          if (!email) {
+            throw new Error('Email is required for email authentication')
           }
-        } catch (error) {
-          console.error('Error parsing session data:', error)
-          this.clearUserSession()
-        }
+          user = await this.loginWithEmail(email)
+          break
+        default:
+          throw new Error(`Unsupported provider: ${provider}`)
+      }
+
+      // Check if this is a new account (smart account deployment status)
+      const walletInfo = await alchemyWallet.getWalletInfo()
+      const isNewAccount = walletInfo ? !walletInfo.isDeployed : true
+
+      return {
+        success: true,
+        user,
+        isNewAccount
+      }
+    } catch (error) {
+      console.error(`Authentication failed for ${provider}:`, error)
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Authentication failed'
       }
     }
-    return null
-  }
-
-  // Get current user
-  getCurrentUser(): UserProfile | null {
-    return this.currentUser || this.getUserSession()
   }
 
   // Check if user is authenticated
   isAuthenticated(): boolean {
-    const user = this.getCurrentUser()
-    const walletConnected = alchemyWallet.isWalletConnected()
-    
-    return !!(user && walletConnected)
+    return !!this.currentUser && alchemyWallet.isReady()
   }
 
-  // Logout and cleanup
+  // Get current user
+  getCurrentUser(): UserProfile | null {
+    return this.currentUser
+  }
+
+  // Logout user
   async logout(): Promise<void> {
     try {
-      console.log('🚪 Logging out...')
-      
-      // Clear current user
-      this.currentUser = null
-      
-      // Clear session storage
-      this.clearUserSession()
-      
-      // Logout from Alchemy wallet
+      // Clear from Alchemy wallet
       await alchemyWallet.logout()
+      
+      // Clear local state
+      this.currentUser = null
+      this.clearUserSession()
       
       console.log('✅ Logout successful')
     } catch (error) {
-      console.error('Error during logout:', error)
+      console.error('❌ Logout failed:', error)
+      throw new Error('Logout failed')
+    }
+  }
+
+  // Store user session in localStorage
+  private storeUserSession(user: UserProfile): void {
+    try {
+      const sessionData = {
+        user,
+        timestamp: Date.now(),
+        chainId: user.chainId,
+        network: user.network
+      }
+      localStorage.setItem('alchemy_user_session', JSON.stringify(sessionData))
+      console.log('💾 User session stored')
+    } catch (error) {
+      console.warn('Failed to store user session:', error)
+    }
+  }
+
+  // Restore user session from localStorage
+  async restoreUserSession(): Promise<UserProfile | null> {
+    try {
+      const stored = localStorage.getItem('alchemy_user_session')
+      if (!stored) {
+        return null
+      }
+
+      const sessionData = JSON.parse(stored)
+      const user = sessionData.user as UserProfile
+      
+      // Check if session is still valid (24 hours)
+      const sessionAge = Date.now() - sessionData.timestamp
+      const maxAge = 24 * 60 * 60 * 1000 // 24 hours
+      
+      if (sessionAge > maxAge) {
+        console.log('🕰️ Session expired, clearing...')
+        this.clearUserSession()
+        return null
+      }
+
+      // Try to restore wallet connection
+      if (alchemyWallet.isReady()) {
+        this.currentUser = user
+        console.log('🔄 User session restored:', user.email)
+        return user
+      } else {
+        console.log('🔌 Wallet not ready, session invalid')
+        this.clearUserSession()
+        return null
+      }
+    } catch (error) {
+      console.warn('Failed to restore user session:', error)
+      this.clearUserSession()
+      return null
     }
   }
 
   // Clear user session
   private clearUserSession(): void {
-    if (typeof window !== 'undefined') {
+    try {
       localStorage.removeItem('alchemy_user_session')
-      sessionStorage.clear() // Clear any temporary data
-    }
-    this.currentUser = null
-  }
-
-  // Get user's wallet balance
-  async getUserBalance(): Promise<string> {
-    if (!this.isAuthenticated()) {
-      throw new Error('User not authenticated')
-    }
-
-    try {
-      const walletInfo = await alchemyWallet.getWalletInfo()
-      return walletInfo?.balance || '0'
+      console.log('🗑️ User session cleared')
     } catch (error) {
-      console.error('Error getting user balance:', error)
-      return '0'
+      console.warn('Failed to clear user session:', error)
     }
   }
 
-  // Get user's smart account address
-  getUserAddress(): string | null {
-    const user = this.getCurrentUser()
-    return user?.address || null
-  }
-
-  // Refresh user session with latest data
-  async refreshUserSession(): Promise<UserProfile | null> {
-    if (!this.isAuthenticated()) {
-      return null
+  // Get authentication status and user info
+  getAuthStatus(): {
+    isAuthenticated: boolean
+    user: UserProfile | null
+    wallet: {
+      isReady: boolean
+      network: string
+      chainId: number
     }
-
-    try {
-      const userInfo = await alchemyWallet.getUserInfo()
-      const walletInfo = await alchemyWallet.getWalletInfo()
-      
-      if (userInfo && walletInfo && this.currentUser) {
-        const updatedUser: UserProfile = {
-          ...this.currentUser,
-          address: walletInfo.address
-        }
-        
-        this.currentUser = updatedUser
-        this.storeUserSession(updatedUser)
-        
-        return updatedUser
-      }
-    } catch (error) {
-      console.error('Error refreshing user session:', error)
-    }
+  } {
+    const currentNetwork = alchemyWallet.getCurrentNetwork()
     
-    return null
+    return {
+      isAuthenticated: this.isAuthenticated(),
+      user: this.currentUser,
+      wallet: {
+        isReady: alchemyWallet.isReady(),
+        network: currentNetwork.name,
+        chainId: currentNetwork.chainId
+      }
+    }
   }
 
-  // Validate authentication status
-  async validateAuth(): Promise<boolean> {
+  // Switch network for authenticated user
+  async switchNetwork(networkKey: string): Promise<boolean> {
     try {
-      const user = this.getCurrentUser()
-      const walletConnected = alchemyWallet.isWalletConnected()
+      if (!this.isAuthenticated()) {
+        throw new Error('User not authenticated')
+      }
+
+      const success = await alchemyWallet.switchNetwork(networkKey)
       
-      if (!user || !walletConnected) {
-        // Clear invalid session
-        this.clearUserSession()
-        return false
+      if (success && this.currentUser) {
+        // Update user profile with new network info
+        const newNetwork = alchemyWallet.getCurrentNetwork()
+        this.currentUser.network = newNetwork.name
+        this.currentUser.chainId = newNetwork.chainId
+        
+        // Update stored session
+        this.storeUserSession(this.currentUser)
+        
+        console.log('🔄 Network switched successfully:', newNetwork.name)
       }
       
-      // Optionally refresh user data
-      await this.refreshUserSession()
-      
-      return true
+      return success
     } catch (error) {
-      console.error('Error validating authentication:', error)
-      this.clearUserSession()
+      console.error('Network switch failed:', error)
       return false
     }
   }
 
-  // Get authentication methods available
-  getAvailableAuthMethods(): string[] {
-    return ['google', 'facebook', 'twitter', 'email']
-  }
+  // Health check for authentication system
+  async healthCheck(): Promise<{
+    status: 'healthy' | 'unhealthy'
+    details: {
+      alchemyWallet: boolean
+      userAuthenticated: boolean
+      sessionValid: boolean
+      networkSupported: boolean
+      environment: {
+        googleEnabled: boolean
+        facebookEnabled: boolean
+        alchemyConfigured: boolean
+      }
+    }
+  }> {
+    try {
+      const googleEnabled = process.env.NEXT_PUBLIC_ENABLE_GOOGLE_LOGIN === 'true'
+      const facebookEnabled = process.env.NEXT_PUBLIC_ENABLE_FACEBOOK_LOGIN === 'true'
+      const alchemyApiKey = !!process.env.NEXT_PUBLIC_ALCHEMY_API_KEY
+      const alchemyAppId = !!process.env.NEXT_PUBLIC_ALCHEMY_APP_ID
 
-  // Get provider-specific authentication URL (for redirect flows)
-  getAuthUrl(provider: 'google' | 'facebook' | 'twitter' | 'email'): string {
-    // For Alchemy embedded accounts, this is handled internally
-    // Return the current domain as the auth happens in popup/iframe
-    return typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000'
+      const currentNetwork = alchemyWallet.getCurrentNetwork()
+      const networkSupported = currentNetwork.chainId === 56 // BNB mainnet
+
+      return {
+        status: 'healthy',
+        details: {
+          alchemyWallet: alchemyWallet.isReady(),
+          userAuthenticated: this.isAuthenticated(),
+          sessionValid: !!this.currentUser,
+          networkSupported,
+          environment: {
+            googleEnabled,
+            facebookEnabled,
+            alchemyConfigured: alchemyApiKey && alchemyAppId
+          }
+        }
+      }
+    } catch (error) {
+      return {
+        status: 'unhealthy',
+        details: {
+          alchemyWallet: false,
+          userAuthenticated: false,
+          sessionValid: false,
+          networkSupported: false,
+          environment: {
+            googleEnabled: false,
+            facebookEnabled: false,
+            alchemyConfigured: false
+          }
+        }
+      }
+    }
   }
 }
 
-export default new SocialAuthService()
+const socialAuth = new SocialAuthService()
+export default socialAuth

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
-import alchemyWallet, { WalletInfo, TokenBalance, TransactionResult, NetworkConfig } from '../services/alchemyWallet'
-import gasManager, { GasUsageStats, GasOptimization, GasEstimateResponse } from '../services/gasManager'
-import socialAuth, { UserProfile } from '../services/socialAuth'
+import alchemyWallet, { WalletInfo, TokenBalance, TransactionResult, NetworkConfig, CustomToken } from '../services/alchemyWallet'
+import gasManager, { GasUsageStats, GasOptimization, GasEstimateResponse, SponsorshipEligibility } from '../services/gasManager'
+import socialAuth, { UserProfile, AuthenticationResult } from '../services/socialAuth'
 
 export interface WalletState {
   isConnected: boolean
@@ -11,10 +11,13 @@ export interface WalletState {
   user: UserProfile | null
   error: string | null
   currentNetwork: NetworkConfig | null
+  supportedNetworks: { [key: string]: NetworkConfig }
   gasUsageStats: GasUsageStats | null
   gasManagerEnabled: boolean
   smartAccountDeployed: boolean
   isDeploying: boolean
+  isNetworkSwitching: boolean
+  customTokens: CustomToken[]
 }
 
 export interface SendTokenOptions {
@@ -34,10 +37,13 @@ export function useAlchemyWallet() {
     user: null,
     error: null,
     currentNetwork: null,
+    supportedNetworks: {},
     gasUsageStats: null,
     gasManagerEnabled: false,
     smartAccountDeployed: false,
     isDeploying: false,
+    isNetworkSwitching: false,
+    customTokens: [],
   })
 
   // Check for existing session on mount
@@ -46,19 +52,24 @@ export function useAlchemyWallet() {
       setState(prev => ({ ...prev, isLoading: true }))
       
       try {
-        // Check if user has valid session and wallet is connected
-        const isValid = await socialAuth.validateAuth()
+        // Get supported networks first
+        const supportedNetworks = alchemyWallet.getSupportedNetworks()
+        const currentNetwork = alchemyWallet.getCurrentNetwork()
         
-        if (isValid) {
-          const user = socialAuth.getCurrentUser()
-          if (user) {
-            await initializeWalletFromSession(user)
-            return
-          }
+        setState(prev => ({ 
+          ...prev, 
+          supportedNetworks, 
+          currentNetwork 
+        }))
+
+        // Try to restore user session
+        const restoredUser = await socialAuth.restoreUserSession()
+        
+        if (restoredUser && alchemyWallet.isReady()) {
+          await initializeWalletFromSession(restoredUser)
+        } else {
+          setState(prev => ({ ...prev, isLoading: false }))
         }
-        
-        // No valid session found
-        setState(prev => ({ ...prev, isLoading: false }))
       } catch (error) {
         console.error('Error checking existing session:', error)
         setState(prev => ({ 
@@ -83,15 +94,15 @@ export function useAlchemyWallet() {
 
       const tokenBalances = await alchemyWallet.getTokenBalances()
       const currentNetwork = alchemyWallet.getCurrentNetwork()
-      const gasManagerEnabled = gasManager.isGasSponsorshipEnabled()
+      const customTokens = alchemyWallet.getCustomTokens()
+      
+      // Check gas manager status
+      const gasHealthCheck = await gasManager.healthCheck()
+      const gasManagerEnabled = gasHealthCheck.gasManagerEnabled
       
       let gasUsageStats = null
-      if (gasManagerEnabled) {
-        try {
-          gasUsageStats = await gasManager.getGasUsageStats()
-        } catch (error) {
-          console.warn('Failed to load gas usage stats:', error)
-        }
+      if (gasManagerEnabled && user.address) {
+        gasUsageStats = gasManager.getGasUsageStats(user.address)
       }
       
       setState(prev => ({
@@ -102,48 +113,62 @@ export function useAlchemyWallet() {
         tokenBalances,
         user,
         currentNetwork,
-        gasUsageStats,
         gasManagerEnabled,
+        gasUsageStats,
         smartAccountDeployed: walletInfo.isDeployed,
+        customTokens,
         error: null
       }))
       
+      console.log('✅ Wallet initialized from session:', {
+        user: user.email,
+        network: currentNetwork.name,
+        deployed: walletInfo.isDeployed,
+        tokensLoaded: tokenBalances.length,
+        customTokens: customTokens.length
+      })
     } catch (error) {
-      console.error('Failed to initialize wallet from session:', error)
-      setState(prev => ({
-        ...prev,
-        isLoading: false,
-        error: 'Failed to restore wallet session',
+      console.error('Error initializing wallet from session:', error)
+      setState(prev => ({ 
+        ...prev, 
+        isLoading: false, 
+        error: 'Failed to initialize wallet' 
       }))
-      // Clear invalid session
-      await socialAuth.logout()
     }
   }
 
-  // Initialize wallet after authentication
-  const initializeWallet = async (user: UserProfile) => {
+  // Authenticate with social provider
+  const authenticateWithSocial = async (provider: 'google' | 'facebook' | 'email', email?: string): Promise<boolean> => {
     setState(prev => ({ ...prev, isLoading: true, error: null }))
     
     try {
-      const walletInfo = await alchemyWallet.getWalletInfo()
+      const result: AuthenticationResult = await socialAuth.authenticate(provider, email)
       
+      if (!result.success || !result.user) {
+        throw new Error(result.error || 'Authentication failed')
+      }
+
+      const user = result.user
+      
+      // Get wallet info and token balances
+      const walletInfo = await alchemyWallet.getWalletInfo()
       if (!walletInfo) {
         throw new Error('Failed to get wallet information')
       }
 
       const tokenBalances = await alchemyWallet.getTokenBalances()
       const currentNetwork = alchemyWallet.getCurrentNetwork()
-      const gasManagerEnabled = gasManager.isGasSponsorshipEnabled()
+      const customTokens = alchemyWallet.getCustomTokens()
       
+      // Check gas manager and get usage stats
+      const gasHealthCheck = await gasManager.healthCheck()
+      const gasManagerEnabled = gasHealthCheck.gasManagerEnabled
       let gasUsageStats = null
-      if (gasManagerEnabled) {
-        try {
-          gasUsageStats = await gasManager.getGasUsageStats()
-        } catch (error) {
-          console.warn('Failed to load gas usage stats:', error)
-        }
-      }
       
+      if (gasManagerEnabled) {
+        gasUsageStats = gasManager.getGasUsageStats(user.address)
+      }
+
       setState(prev => ({
         ...prev,
         isConnected: true,
@@ -152,89 +177,335 @@ export function useAlchemyWallet() {
         tokenBalances,
         user,
         currentNetwork,
-        gasUsageStats,
         gasManagerEnabled,
+        gasUsageStats,
         smartAccountDeployed: walletInfo.isDeployed,
+        customTokens,
+        error: null
       }))
+
+      console.log('✅ Authentication successful:', {
+        provider,
+        user: user.email,
+        network: currentNetwork.name,
+        smartAccountDeployed: walletInfo.isDeployed,
+        isNewAccount: result.isNewAccount
+      })
+
+      return true
+    } catch (error) {
+      console.error('Authentication failed:', error)
+      setState(prev => ({ 
+        ...prev, 
+        isLoading: false, 
+        error: error instanceof Error ? error.message : 'Authentication failed' 
+      }))
+      return false
+    }
+  }
+
+  // Switch network
+  const switchNetwork = async (networkKey: string): Promise<boolean> => {
+    if (!state.isConnected) {
+      setState(prev => ({ ...prev, error: 'Please connect wallet first' }))
+      return false
+    }
+
+    setState(prev => ({ ...prev, isNetworkSwitching: true, error: null }))
+    
+    try {
+      // Switch network in wallet service
+      const walletSuccess = await alchemyWallet.switchNetwork(networkKey)
+      if (!walletSuccess) {
+        throw new Error('Failed to switch network in wallet')
+      }
+
+      // Switch network in gas manager
+      await gasManager.switchNetwork(networkKey)
       
-    } catch (error) {
+      // Switch network in social auth
+      await socialAuth.switchNetwork(networkKey)
+
+      // Refresh wallet data for new network
+      const walletInfo = await alchemyWallet.getWalletInfo()
+      const tokenBalances = await alchemyWallet.getTokenBalances()
+      const currentNetwork = alchemyWallet.getCurrentNetwork()
+      const customTokens = alchemyWallet.getCustomTokens()
+      
+      // Update gas usage stats for new network
+      let gasUsageStats = null
+      if (state.gasManagerEnabled && state.user) {
+        gasUsageStats = gasManager.getGasUsageStats(state.user.address)
+      }
+
       setState(prev => ({
         ...prev,
-        isLoading: false,
-        error: error instanceof Error ? error.message : 'Failed to initialize wallet',
+        currentNetwork,
+        walletInfo,
+        tokenBalances,
+        customTokens,
+        gasUsageStats,
+        smartAccountDeployed: walletInfo?.isDeployed || false,
+        isNetworkSwitching: false
       }))
+
+      console.log('🔄 Network switched successfully:', currentNetwork.name)
+      return true
+    } catch (error) {
+      console.error('Network switch failed:', error)
+      setState(prev => ({ 
+        ...prev, 
+        isNetworkSwitching: false,
+        error: error instanceof Error ? error.message : 'Network switch failed' 
+      }))
+      return false
     }
   }
 
-  // Login with Google
-  const loginWithGoogle = async () => {
-    setState(prev => ({ ...prev, isLoading: true, error: null }))
-    
+  // Add custom token
+  const addCustomToken = async (tokenAddress: string): Promise<CustomToken | null> => {
     try {
-      const user = await socialAuth.loginWithGoogle()
-      await initializeWallet(user)
+      const token = await alchemyWallet.addCustomToken(tokenAddress)
+      
+      if (token) {
+        // Refresh token balances and custom tokens list
+        const tokenBalances = await alchemyWallet.getTokenBalances()
+        const customTokens = alchemyWallet.getCustomTokens()
+        
+        setState(prev => ({
+          ...prev,
+          tokenBalances,
+          customTokens
+        }))
+        
+        console.log('✅ Custom token added:', token.symbol)
+      }
+      
+      return token
     } catch (error) {
-      setState(prev => ({
-        ...prev,
-        isLoading: false,
-        error: error instanceof Error ? error.message : 'Google login failed',
+      console.error('Failed to add custom token:', error)
+      setState(prev => ({ 
+        ...prev, 
+        error: error instanceof Error ? error.message : 'Failed to add token' 
       }))
+      return null
     }
   }
 
-  // Login with Facebook
-  const loginWithFacebook = async () => {
-    setState(prev => ({ ...prev, isLoading: true, error: null }))
-    
+  // Remove custom token
+  const removeCustomToken = (tokenAddress: string): boolean => {
     try {
-      const user = await socialAuth.loginWithFacebook()
-      await initializeWallet(user)
+      const success = alchemyWallet.removeCustomToken(tokenAddress)
+      
+      if (success) {
+        // Refresh token balances and custom tokens list
+        const refreshData = async () => {
+          const tokenBalances = await alchemyWallet.getTokenBalances()
+          const customTokens = alchemyWallet.getCustomTokens()
+          
+          setState(prev => ({
+            ...prev,
+            tokenBalances,
+            customTokens
+          }))
+        }
+        
+        refreshData()
+        console.log('✅ Custom token removed')
+      }
+      
+      return success
     } catch (error) {
-      setState(prev => ({
-        ...prev,
-        isLoading: false,
-        error: error instanceof Error ? error.message : 'Facebook login failed',
+      console.error('Failed to remove custom token:', error)
+      setState(prev => ({ 
+        ...prev, 
+        error: 'Failed to remove token' 
       }))
+      return false
     }
   }
 
-  // Login with Twitter
-  const loginWithTwitter = async () => {
-    setState(prev => ({ ...prev, isLoading: true, error: null }))
-    
+  // Send native token (BNB, ETH, etc.)
+  const sendNativeToken = async (to: string, amount: string): Promise<TransactionResult> => {
+    if (!state.isConnected) {
+      return { success: false, error: 'Wallet not connected' }
+    }
+
     try {
-      const user = await socialAuth.loginWithTwitter()
-      await initializeWallet(user)
+      setState(prev => ({ ...prev, isLoading: true, error: null }))
+      
+      const result = await alchemyWallet.sendNativeToken(to, amount)
+      
+      if (result.success && state.user && result.gasFee) {
+        // Record gas usage for tracking
+        await gasManager.recordGasUsage(
+          state.user.address, 
+          result.gasUsed || '0', 
+          result.gasFee
+        )
+        
+        // Refresh balances and gas stats
+        await refreshWalletData()
+      }
+      
+      setState(prev => ({ ...prev, isLoading: false }))
+      return result
     } catch (error) {
-      setState(prev => ({
-        ...prev,
-        isLoading: false,
-        error: error instanceof Error ? error.message : 'Twitter login failed',
-      }))
+      setState(prev => ({ ...prev, isLoading: false }))
+      return { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Transaction failed' 
+      }
     }
   }
 
-  // Login with Email
-  const loginWithEmail = async () => {
-    setState(prev => ({ ...prev, isLoading: true, error: null }))
-    
+  // Send token (ERC20/BEP20)
+  const sendToken = async (options: SendTokenOptions): Promise<TransactionResult> => {
+    if (!state.isConnected) {
+      return { success: false, error: 'Wallet not connected' }
+    }
+
     try {
-      const user = await socialAuth.loginWithEmail()
-      await initializeWallet(user)
+      setState(prev => ({ ...prev, isLoading: true, error: null }))
+      
+      const result = await alchemyWallet.sendToken(options)
+      
+      if (result.success && state.user && result.gasFee) {
+        // Record gas usage for tracking
+        await gasManager.recordGasUsage(
+          state.user.address, 
+          result.gasUsed || '0', 
+          result.gasFee
+        )
+        
+        // Refresh balances and gas stats
+        await refreshWalletData()
+      }
+      
+      setState(prev => ({ ...prev, isLoading: false }))
+      return result
     } catch (error) {
+      setState(prev => ({ ...prev, isLoading: false }))
+      return { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Transaction failed' 
+      }
+    }
+  }
+
+  // Get gas estimate
+  const getGasEstimate = async (
+    to: string, 
+    amount?: string, 
+    tokenAddress?: string
+  ): Promise<GasEstimateResponse | null> => {
+    if (!state.user || !state.currentNetwork) {
+      return null
+    }
+
+    try {
+      const request = {
+        from: state.user.address,
+        to,
+        value: amount || '0',
+        chainId: state.currentNetwork.chainId,
+        operation: (tokenAddress ? 'token_transfer' : 'transfer') as 'transfer' | 'token_transfer'
+      }
+
+      return await gasManager.estimateGas(request)
+    } catch (error) {
+      console.error('Failed to get gas estimate:', error)
+      return null
+    }
+  }
+
+  // Check gas sponsorship eligibility
+  const checkGasSponsorship = async (
+    to: string, 
+    amount?: string, 
+    tokenAddress?: string
+  ): Promise<SponsorshipEligibility | null> => {
+    if (!state.user || !state.currentNetwork) {
+      return null
+    }
+
+    try {
+      const request = {
+        from: state.user.address,
+        to,
+        value: amount || '0',
+        chainId: state.currentNetwork.chainId,
+        operation: (tokenAddress ? 'token_transfer' : 'transfer') as 'transfer' | 'token_transfer'
+      }
+
+      return await gasManager.checkSponsorshipEligibility(request)
+    } catch (error) {
+      console.error('Failed to check gas sponsorship:', error)
+      return null
+    }
+  }
+
+  // Get gas optimization suggestions
+  const getGasOptimizations = async (
+    to: string, 
+    amount?: string, 
+    tokenAddress?: string
+  ): Promise<GasOptimization | null> => {
+    if (!state.user || !state.currentNetwork) {
+      return null
+    }
+
+    try {
+      const request = {
+        from: state.user.address,
+        to,
+        value: amount || '0',
+        chainId: state.currentNetwork.chainId,
+        operation: (tokenAddress ? 'token_transfer' : 'transfer') as 'transfer' | 'token_transfer'
+      }
+
+      return await gasManager.getGasOptimizations(request)
+    } catch (error) {
+      console.error('Failed to get gas optimizations:', error)
+      return null
+    }
+  }
+
+  // Refresh wallet data
+  const refreshWalletData = async (): Promise<void> => {
+    if (!state.isConnected) return
+
+    try {
+      const [walletInfo, tokenBalances] = await Promise.all([
+        alchemyWallet.getWalletInfo(),
+        alchemyWallet.getTokenBalances()
+      ])
+
+      let gasUsageStats = null
+      if (state.gasManagerEnabled && state.user) {
+        gasUsageStats = gasManager.getGasUsageStats(state.user.address)
+      }
+
+      const customTokens = alchemyWallet.getCustomTokens()
+
       setState(prev => ({
         ...prev,
-        isLoading: false,
-        error: error instanceof Error ? error.message : 'Email login failed',
+        walletInfo,
+        tokenBalances,
+        gasUsageStats,
+        customTokens,
+        smartAccountDeployed: walletInfo?.isDeployed || false
       }))
+    } catch (error) {
+      console.error('Failed to refresh wallet data:', error)
     }
   }
 
   // Logout
-  const logout = async () => {
-    setState(prev => ({ ...prev, isLoading: true }))
-    
+  const logout = async (): Promise<void> => {
     try {
+      setState(prev => ({ ...prev, isLoading: true }))
+      
       await socialAuth.logout()
       
       setState({
@@ -244,204 +515,58 @@ export function useAlchemyWallet() {
         tokenBalances: [],
         user: null,
         error: null,
-        currentNetwork: null,
+        currentNetwork: alchemyWallet.getCurrentNetwork(),
+        supportedNetworks: alchemyWallet.getSupportedNetworks(),
         gasUsageStats: null,
         gasManagerEnabled: false,
         smartAccountDeployed: false,
         isDeploying: false,
-      })
-    } catch (error) {
-      console.error('Error during logout:', error)
-      setState(prev => ({
-        ...prev,
-        isLoading: false,
-        error: 'Failed to logout properly'
-      }))
-    }
-  }
-
-  // Refresh balance and token information
-  const refreshBalance = async () => {
-    if (!state.isConnected) return
-    
-    try {
-      const walletInfo = await alchemyWallet.getWalletInfo()
-      const tokenBalances = await alchemyWallet.getTokenBalances()
-      
-      setState(prev => ({
-        ...prev,
-        walletInfo,
-        tokenBalances
-      }))
-      
-    } catch (error) {
-      console.error('Failed to refresh balance:', error)
-      setState(prev => ({
-        ...prev,
-        error: 'Failed to refresh balance'
-      }))
-    }
-  }
-
-  // Refresh gas usage statistics
-  const refreshGasUsageStats = async () => {
-    if (!state.gasManagerEnabled) return
-    
-    try {
-      const gasUsageStats = await gasManager.getGasUsageStats()
-      setState(prev => ({ ...prev, gasUsageStats }))
-    } catch (error) {
-      console.error('Failed to refresh gas usage stats:', error)
-    }
-  }
-
-  // Estimate gas for transaction
-  const estimateGas = async (
-    to: string,
-    value: string = '0',
-    data: string = '0x'
-  ): Promise<GasEstimateResponse | null> => {
-    if (!state.isConnected || !state.currentNetwork || !state.walletInfo) {
-      throw new Error('Wallet not connected')
-    }
-
-    try {
-      const gasEstimate = await gasManager.estimateGasForTransaction({
-        from: state.walletInfo.smartAccountAddress,
-        to,
-        value,
-        data,
-        chainId: state.currentNetwork.chainId
+        isNetworkSwitching: false,
+        customTokens: [],
       })
       
-      return gasEstimate
+      console.log('✅ Logout successful')
     } catch (error) {
-      console.error('Failed to estimate gas:', error)
-      return null
+      console.error('Logout failed:', error)
+      setState(prev => ({ 
+        ...prev, 
+        isLoading: false, 
+        error: 'Logout failed' 
+      }))
     }
   }
 
-  // Get gas optimization suggestions
-  const getGasOptimization = async (): Promise<GasOptimization | null> => {
-    try {
-      return await gasManager.getGasOptimization()
-    } catch (error) {
-      console.error('Failed to get gas optimization:', error)
-      return null
-    }
-  }
-
-  // Send native BNB
-  const sendNativeToken = async (to: string, amount: string): Promise<TransactionResult> => {
-    if (!state.isConnected) {
-      throw new Error('Wallet not connected')
-    }
-
-    try {
-      const result = await alchemyWallet.sendNativeToken(to, amount)
-      
-      if (result.success) {
-        // Refresh balances and gas stats after successful transaction
-        await Promise.all([
-          refreshBalance(),
-          refreshGasUsageStats()
-        ])
-      }
-      
-      return result
-    } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Transaction failed'
-      }
-    }
-  }
-
-  // Send BEP-20 tokens
-  const sendToken = async (options: SendTokenOptions): Promise<TransactionResult> => {
-    if (!state.isConnected) {
-      throw new Error('Wallet not connected')
-    }
-
-    try {
-      const result = await alchemyWallet.sendToken(options)
-      
-      if (result.success) {
-        // Refresh balances and gas stats after successful transaction
-        await Promise.all([
-          refreshBalance(),
-          refreshGasUsageStats()
-        ])
-      }
-      
-      return result
-    } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Token transfer failed'
-      }
-    }
-  }
-
-  // Get wallet addresses
-  const getWalletAddresses = () => {
-    return {
-      smartAccount: state.walletInfo?.smartAccountAddress || null,
-      user: state.user?.address || null
-    }
-  }
-
-  // Get current network information
-  const getCurrentNetwork = () => {
-    return state.currentNetwork
-  }
-
-  // Get gas manager status
-  const getGasManagerStatus = () => {
-    return gasManager.getGasManagerStatus()
-  }
-
-  // Health check for all services
-  const performHealthCheck = async () => {
-    try {
-      const healthStatus = await alchemyWallet.healthCheck()
-      const gasManagerStatus = gasManager.getGasManagerStatus()
-      
-      return {
-        ...healthStatus,
-        gasManager: gasManagerStatus
-      }
-    } catch (error) {
-      return {
-        status: 'unhealthy' as const,
-        error: error instanceof Error ? error.message : 'Health check failed'
-      }
-    }
+  // Clear error
+  const clearError = () => {
+    setState(prev => ({ ...prev, error: null }))
   }
 
   return {
     // State
     ...state,
     
-    // Authentication methods
-    loginWithGoogle,
-    loginWithFacebook,
-    loginWithTwitter,
-    loginWithEmail,
-    logout,
-    
-    // Wallet operations
-    refreshBalance,
-    refreshGasUsageStats,
-    estimateGas,
-    getGasOptimization,
+    // Actions
+    authenticateWithGoogle: () => authenticateWithSocial('google'),
+    authenticateWithFacebook: () => authenticateWithSocial('facebook'),
+    authenticateWithEmail: (email: string) => authenticateWithSocial('email', email),
+    switchNetwork,
+    addCustomToken,
+    removeCustomToken,
     sendNativeToken,
     sendToken,
+    getGasEstimate,
+    checkGasSponsorship,
+    getGasOptimizations,
+    refreshWalletData,
+    logout,
+    clearError,
     
-    // Utility methods
-    getWalletAddresses,
-    getCurrentNetwork,
-    getGasManagerStatus,
-    performHealthCheck,
+    // Computed values
+    isConnected: state.isConnected,
+    hasCustomTokens: state.customTokens.length > 0,
+    isPrimaryNetwork: state.currentNetwork?.chainId === 56, // BNB mainnet
+    networkName: state.currentNetwork?.name || 'Unknown',
+    networkSymbol: state.currentNetwork?.symbol || 'ETH',
+    explorerUrl: state.currentNetwork?.explorer || '',
   }
 }
