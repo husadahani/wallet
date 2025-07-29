@@ -192,6 +192,34 @@ export function useAlchemyWallet() {
         isNewAccount: result.isNewAccount
       })
 
+      // Auto-deploy smart wallet if not already deployed
+      if (!walletInfo.isDeployed && result.isNewAccount) {
+        console.log('🚀 New account detected, auto-deploying smart wallet...')
+        setTimeout(async () => {
+          try {
+            setState(prev => ({ ...prev, isDeploying: true }))
+            const deploySuccess = await alchemyWallet.deploySmartWalletWithDummyTransaction()
+            
+            if (deploySuccess) {
+              // Refresh wallet data to update deployment status
+              const updatedWalletInfo = await alchemyWallet.getWalletInfo()
+              setState(prev => ({ 
+                ...prev, 
+                smartAccountDeployed: updatedWalletInfo?.isDeployed || false,
+                isDeploying: false
+              }))
+              console.log('✅ Smart wallet auto-deployed successfully!')
+            } else {
+              setState(prev => ({ ...prev, isDeploying: false }))
+              console.warn('⚠️ Auto-deployment failed, user can deploy manually')
+            }
+          } catch (error) {
+            console.error('Auto-deployment error:', error)
+            setState(prev => ({ ...prev, isDeploying: false }))
+          }
+        }, 2000) // Wait 2 seconds to ensure everything is ready
+      }
+
       return true
     } catch (error) {
       console.error('Authentication failed:', error)
