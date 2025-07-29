@@ -536,6 +536,37 @@ export function useAlchemyWallet() {
     }
   }
 
+  // Deploy smart wallet with dummy transaction
+  const deploySmartWallet = async (): Promise<boolean> => {
+    if (!state.isConnected) {
+      setState(prev => ({ ...prev, error: 'Wallet not connected' }))
+      return false
+    }
+
+    try {
+      setState(prev => ({ ...prev, isDeploying: true, error: null }))
+      
+      const success = await alchemyWallet.deploySmartWalletWithDummyTransaction()
+      
+      if (success) {
+        // Refresh wallet data to update deployment status
+        await refreshWalletData()
+        console.log('✅ Smart wallet deployed successfully')
+      }
+      
+      setState(prev => ({ ...prev, isDeploying: false }))
+      return success
+    } catch (error) {
+      console.error('Failed to deploy smart wallet:', error)
+      setState(prev => ({ 
+        ...prev, 
+        isDeploying: false,
+        error: error instanceof Error ? error.message : 'Failed to deploy smart wallet' 
+      }))
+      return false
+    }
+  }
+
   // Clear error
   const clearError = () => {
     setState(prev => ({ ...prev, error: null }))
@@ -558,6 +589,7 @@ export function useAlchemyWallet() {
     checkGasSponsorship,
     getGasOptimizations,
     refreshWalletData,
+    deploySmartWallet,
     logout,
     clearError,
     

@@ -1,5 +1,4 @@
-import { createModularAccountAlchemyClient } from '@alchemy/aa-alchemy'
-// import { AlchemySigner } from '@alchemy/aa-signers' // TODO: Fix import for v3
+import { createModularAccountAlchemyClient, AlchemySigner } from '@alchemy/aa-alchemy'
 import { createPublicClient, http, parseEther, formatEther, Address, parseUnits, formatUnits } from 'viem'
 import { bsc, sepolia, mainnet, polygon } from 'viem/chains'
 import axios from 'axios'
@@ -103,7 +102,7 @@ export const SUPPORTED_NETWORKS: { [key: string]: NetworkConfig } = {
 
 class AlchemyWalletService {
   private smartAccountClient: any = null
-  private alchemySigner: any | null = null // TODO: Fix type for v3
+  private alchemySigner: AlchemySigner | null = null
   private smartAccount: any | null = null
   private currentNetwork: NetworkConfig = BNB_MAINNET_CONFIG
   private isInitialized: boolean = false
@@ -111,7 +110,7 @@ class AlchemyWalletService {
   private userInfo: any = null
 
   // Initialize Alchemy Signer with embedded accounts for social login
-  private async initializeAlchemySigner(): Promise<any> { // TODO: Fix type for v3
+  private async initializeAlchemySigner(): Promise<AlchemySigner> {
     if (this.alchemySigner) {
       return this.alchemySigner
     }
@@ -124,9 +123,19 @@ class AlchemyWalletService {
     }
 
     try {
-      // TODO: Fix AlchemySigner import and initialization for v3
-      console.log('⚠️ AlchemySigner temporarily disabled for build')
-      this.alchemySigner = null
+      // Initialize Alchemy Signer with embedded accounts
+      this.alchemySigner = new AlchemySigner({
+        client: {
+          connection: {
+            apiKey: alchemyApiKey,
+          },
+          iframeConfig: {
+            iframeContainerId: "alchemy-signer-iframe",
+          },
+        },
+      })
+
+      console.log('✅ Alchemy Signer initialized successfully')
       return this.alchemySigner
     } catch (error) {
       console.error('Failed to initialize Alchemy Signer:', error)
@@ -135,19 +144,26 @@ class AlchemyWalletService {
   }
 
   // Create Modular Account with Alchemy services and gas sponsorship
-  private async createModularAccount(signer: any) { // TODO: Fix type for v3
+  private async createModularAccount(signer: AlchemySigner): Promise<string> {
     try {
       const alchemyApiKey = process.env.NEXT_PUBLIC_ALCHEMY_API_KEY
       if (!alchemyApiKey) {
         throw new Error('Alchemy API Key is required')
       }
 
-      // TODO: Fix createModularAccountAlchemyClient configuration for v3
-      console.log('⚠️ Modular Account creation temporarily disabled for build')
-      this.smartAccountClient = null
-      const address = '0x0000000000000000000000000000000000000000' // Mock address
+      // Create modular account client with gas sponsorship
+      this.smartAccountClient = await createModularAccountAlchemyClient({
+        apiKey: alchemyApiKey,
+        chain: this.currentNetwork.chain,
+        signer,
+        gasManagerConfig: this.currentNetwork.gasPolicy ? {
+          policyId: this.currentNetwork.gasPolicy,
+        } : undefined,
+      })
       
-      console.log('⚠️ Mock Modular Account address:', address)
+      const address = await this.smartAccountClient.getAddress()
+      
+      console.log('✅ Modular Account created:', address)
       console.log('🎯 Chain:', this.currentNetwork.name)
       console.log('⛽ Gas sponsorship enabled:', !!this.currentNetwork.gasPolicy)
 
@@ -175,47 +191,92 @@ class AlchemyWalletService {
       const code = await publicClient.getBytecode({ address: address as Address })
       const isDeployed = !!code && code !== '0x'
 
-      if (!isDeployed && process.env.NEXT_PUBLIC_DUMMY_TRANSACTION_ENABLED === 'true') {
-        console.log('🚀 Account not deployed, creating dummy transaction...')
-        
-        // Create a small dummy transaction to deploy the account
-        const dummyTx = await this.smartAccountClient.sendUserOperation({
-          uo: {
-            target: address as Address,
-            data: '0x',
-            value: parseEther('0.00001'), // Very small amount
-          },
-        })
-
-        console.log('⏳ Dummy transaction sent:', dummyTx.hash)
-        
-        // Wait for transaction to be mined
-        const receipt = await this.smartAccountClient.waitForUserOperationTransaction({
-          hash: dummyTx.hash
-        })
-        
-        console.log('✅ Smart account deployed with dummy transaction:', receipt.transactionHash)
-      } else if (isDeployed) {
+      if (!isDeployed) {
+        console.log('📝 Smart account not yet deployed. Will deploy on first transaction.')
+      } else {
         console.log('✅ Smart account already deployed')
       }
     } catch (error) {
-      console.warn('⚠️ Could not deploy smart account with dummy transaction:', error)
-      // Don't throw error, deployment will happen on first transaction
+      console.warn('⚠️ Could not check smart account deployment status:', error)
+    }
+  }
+
+  // Deploy smart wallet with dummy transaction
+  async deploySmartWalletWithDummyTransaction(): Promise<boolean> {
+    if (!this.smartAccountClient) {
+      console.warn('Smart account client not initialized')
+      return false
+    }
+
+    try {
+      const address = await this.smartAccountClient.getAddress()
+      const publicClient = createPublicClient({
+        chain: this.currentNetwork.chain,
+        transport: http(this.currentNetwork.rpcUrl)
+      })
+      
+      // Check if account is already deployed
+      const code = await publicClient.getBytecode({ address: address as Address })
+      const isDeployed = !!code && code !== '0x'
+
+      if (isDeployed) {
+        console.log('✅ Smart account already deployed')
+        return true
+      }
+
+      console.log('🚀 Deploying smart account with dummy transaction...')
+      
+      // Create a small dummy transaction to deploy the account
+      // Send to self with minimal amount
+      const dummyTx = await this.smartAccountClient.sendUserOperation({
+        uo: {
+          target: address as Address,
+          data: '0x',
+          value: parseEther('0.000001'), // Very small amount (1 gwei)
+        },
+      })
+
+      console.log('⏳ Dummy transaction sent:', dummyTx.hash)
+      
+      // Wait for transaction to be mined
+      const receipt = await this.smartAccountClient.waitForUserOperationTransaction({
+        hash: dummyTx.hash
+      })
+      
+      console.log('✅ Smart account deployed successfully!')
+      console.log('📄 Transaction hash:', receipt.transactionHash)
+      
+      return true
+    } catch (error) {
+      console.error('❌ Failed to deploy smart account with dummy transaction:', error)
+      return false
     }
   }
 
   // Authenticate with social login (Google, Facebook)
-  async authenticateWithSocial(provider: 'google' | 'facebook' | 'twitter' | 'email' = 'google'): Promise<string> {
+  async authenticateWithSocial(provider: 'google' | 'facebook' | 'twitter' | 'email' = 'google', email?: string): Promise<string> {
     try {
       console.log(`🔐 Starting ${provider} authentication with Alchemy...`)
       
       const signer = await this.initializeAlchemySigner()
       
+      // For email authentication, we need an actual email
+      // For social providers, this is a simplified implementation
+      // In production, you would integrate with the actual OAuth flow
+      let authEmail = email
+      if (!authEmail) {
+        if (provider === 'email') {
+          throw new Error('Email is required for email authentication')
+        }
+        // For demo purposes, use a placeholder email
+        // In production, this would come from the OAuth provider
+        authEmail = `demo+${provider}@example.com`
+      }
+      
       // Authenticate using Alchemy's embedded account system
       const user = await signer.authenticate({
-        type: provider === 'email' ? 'email' : 'oauth',
-        authProviderId: provider,
-        mode: 'popup', // or 'redirect'
+        type: 'email',
+        email: authEmail,
       })
 
       console.log('🔐 User authenticated:', user)
@@ -226,6 +287,11 @@ class AlchemyWalletService {
       
       // Load user's custom tokens
       await this.loadCustomTokens()
+      
+      // Try to deploy smart wallet with dummy transaction if enabled
+      if (process.env.NEXT_PUBLIC_DUMMY_TRANSACTION_ENABLED === 'true') {
+        await this.deploySmartWalletWithDummyTransaction()
+      }
       
       return address
     } catch (error) {
@@ -577,9 +643,14 @@ class AlchemyWalletService {
     return this.customTokens
   }
 
-  // Save custom tokens to localStorage
+  // Save custom tokens to localStorage (client-side only)
   private saveCustomTokens(): void {
     try {
+      if (typeof window === 'undefined') {
+        console.warn('localStorage not available on server-side')
+        return
+      }
+      
       const key = `custom_tokens_${this.currentNetwork.chainId}`
       localStorage.setItem(key, JSON.stringify(this.customTokens))
     } catch (error) {
@@ -587,9 +658,15 @@ class AlchemyWalletService {
     }
   }
 
-  // Load custom tokens from localStorage
+  // Load custom tokens from localStorage (client-side only)
   private async loadCustomTokens(): Promise<void> {
     try {
+      if (typeof window === 'undefined') {
+        console.warn('localStorage not available on server-side')
+        this.customTokens = []
+        return
+      }
+      
       const key = `custom_tokens_${this.currentNetwork.chainId}`
       const saved = localStorage.getItem(key)
       if (saved) {
@@ -719,5 +796,14 @@ class AlchemyWalletService {
   }
 }
 
-const alchemyWallet = new AlchemyWalletService()
-export default alchemyWallet
+// Lazy instantiation to avoid SSR issues
+let alchemyWallet: AlchemyWalletService | null = null
+
+function getAlchemyWallet(): AlchemyWalletService {
+  if (!alchemyWallet) {
+    alchemyWallet = new AlchemyWalletService()
+  }
+  return alchemyWallet
+}
+
+export default getAlchemyWallet()

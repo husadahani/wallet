@@ -26,12 +26,14 @@ export default function Home() {
     currentNetwork,
     gasManagerEnabled,
     smartAccountDeployed,
+    isDeploying,
     authenticateWithGoogle,
     authenticateWithFacebook,
     authenticateWithEmail,
     logout,
     sendToken,
-    refreshWalletData
+    refreshWalletData,
+    deploySmartWallet
   } = useAlchemyWallet()
 
   const showNotification = (message: string) => {
@@ -54,6 +56,9 @@ export default function Home() {
       </Head>
 
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+        {/* Alchemy Signer iframe container */}
+        <div id="alchemy-signer-iframe" style={{ display: 'none' }}></div>
+        
         {!isConnected ? (
           <LoginScreen
             onGoogleLogin={authenticateWithGoogle}
@@ -132,10 +137,32 @@ export default function Home() {
         {isConnected && !smartAccountDeployed && !isLoading && (
           <div className="fixed bottom-4 left-4 right-4 bg-blue-500 text-white px-4 py-3 rounded-lg shadow-lg max-w-md mx-auto">
             <div className="flex justify-between items-center">
-              <div>
-                <p className="font-medium">Smart Wallet sedang di-setup</p>
-                <p className="text-sm opacity-90">Deployment otomatis saat transaksi pertama</p>
+              <div className="flex-1">
+                <p className="font-medium">Smart Wallet perlu di-deploy</p>
+                <p className="text-sm opacity-90">
+                  {isDeploying ? 'Melakukan deployment...' : 'Klik tombol untuk deploy smart wallet'}
+                </p>
               </div>
+              {!isDeploying && (
+                <button
+                  onClick={async () => {
+                    const success = await deploySmartWallet()
+                    if (success) {
+                      showNotification('Smart wallet berhasil di-deploy!')
+                    } else {
+                      showNotification('Gagal deploy smart wallet. Coba lagi.')
+                    }
+                  }}
+                  className="ml-3 bg-white text-blue-500 px-3 py-1 rounded text-sm font-medium hover:bg-gray-100 transition-colors"
+                >
+                  Deploy
+                </button>
+              )}
+              {isDeploying && (
+                <div className="ml-3 text-sm">
+                  <div className="animate-spin inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full"></div>
+                </div>
+              )}
             </div>
           </div>
         )}

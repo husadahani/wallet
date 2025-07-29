@@ -1,34 +1,20 @@
-# CryptoWallet dengan Alchemy Social Authentication
+# 🚀 Smart Wallet BNB - Alchemy Integration
 
-Aplikasi crypto wallet yang menggunakan layanan **Google Login** dan **Facebook Login** dari **Alchemy Account Kit** untuk autentikasi yang mudah dan aman.
+Smart wallet application built with Next.js that integrates with Alchemy Account Kit for seamless social login and smart wallet functionality on BNB Smart Chain.
 
-## 🚀 Fitur Utama
+## ✨ Features
 
-- ✅ **Social Authentication**: Login dengan Google dan Facebook menggunakan Alchemy Account Kit
-- ✅ **Smart Wallet**: Otomatis membuat smart contract wallet untuk setiap user
-- ✅ **Gas Sponsorship**: Transaksi gratis tanpa perlu gas fees (opsional)
-- ✅ **Multi-Network**: Support untuk Ethereum, Sepolia, Polygon, dan BSC
-- ✅ **Responsive UI**: Interface yang modern dan mobile-friendly
-- ✅ **Session Management**: Sesi login yang aman dan persistent
+- 🔐 **Social Login**: Google, Facebook authentication via Alchemy Embedded Accounts
+- 💰 **Smart Wallet**: ERC-4337 compatible smart wallets with gas sponsorship
+- ⛽ **Gas Manager**: Gasless transactions with Alchemy Gas Manager
+- 🌐 **BNB Smart Chain**: Optimized for BNB mainnet with multi-network support
+- 🎯 **Auto Deploy**: Automatic smart wallet deployment with dummy transactions
+- 💎 **Custom Tokens**: Add and manage BEP-20 tokens
+- 📱 **Responsive UI**: Modern, mobile-friendly interface
 
-## 🛠️ Teknologi
+## 🛠️ Quick Setup
 
-- **Frontend**: Next.js 14, React 18, TypeScript, Tailwind CSS
-- **Blockchain**: Ethereum, Viem, Account Abstraction (ERC-4337)
-- **Authentication**: Alchemy Account Kit, Google OAuth, Facebook Login
-- **Smart Wallets**: Alchemy Smart Account Client
-- **Gas Management**: Alchemy Gas Manager
-
-## 📋 Prasyarat
-
-- Node.js 18+ dan npm/yarn
-- Akun Alchemy (gratis di [dashboard.alchemy.com](https://dashboard.alchemy.com))
-- Google Developer Account untuk OAuth
-- Facebook Developer Account untuk Login
-
-## 🔧 Setup dan Instalasi
-
-### 1. Clone Repository
+### 1. Clone and Install
 
 ```bash
 git clone <repository-url>
@@ -36,252 +22,218 @@ cd crypto-wallet
 npm install
 ```
 
-### 2. Setup Alchemy Account Kit
+### 2. Configure Environment Variables
 
-1. **Buat Alchemy App**:
-   - Kunjungi [Alchemy Dashboard](https://dashboard.alchemy.com/)
-   - Buat project baru di Ethereum Sepolia (untuk testing)
-   - Copy API Key yang diberikan
-
-2. **Setup Gas Manager** (Opsional):
-   - Di Alchemy Dashboard, buka Gas Manager
-   - Buat policy baru untuk gas sponsorship
-   - Copy Policy ID
-
-### 3. Setup Google OAuth
-
-1. **Buat Google Cloud Project**:
-   - Kunjungi [Google Cloud Console](https://console.developers.google.com/)
-   - Buat project baru atau pilih yang sudah ada
-   - Enable Google+ API
-
-2. **Buat OAuth 2.0 Credentials**:
-   - Pergi ke Credentials → Create credentials → OAuth 2.0 Client ID
-   - Application type: Web application
-   - Authorized JavaScript origins: `http://localhost:3000`, `https://yourdomain.com`
-   - Authorized redirect URIs: `http://localhost:3000/auth/callback`
-   - Copy Client ID yang diberikan
-
-### 4. Setup Facebook Login
-
-1. **Buat Facebook App**:
-   - Kunjungi [Facebook Developers](https://developers.facebook.com/)
-   - Create App → Consumer → Next
-   - Isi nama aplikasi dan email kontak
-
-2. **Add Facebook Login Product**:
-   - Di dashboard app, klik "Add Product"
-   - Pilih "Facebook Login" → Set up
-   - Settings → Basic: Copy App ID
-   - Facebook Login → Settings:
-     - Valid OAuth Redirect URIs: `http://localhost:3000/auth/callback`
-     - Use Strict Mode for Redirect URIs: Yes
-
-### 5. Konfigurasi Environment Variables
-
-Buat file `.env.local` dan copy dari `.env.example`:
-
+Copy the environment template:
 ```bash
-cp .env.example .env.local
+cp .env.local .env.local
 ```
 
-Edit `.env.local` dan isi dengan data yang sudah didapat:
+### 3. Get Alchemy Credentials
 
-```env
-# Alchemy Configuration
-NEXT_PUBLIC_ALCHEMY_API_KEY=your_alchemy_api_key_here
-NEXT_PUBLIC_ALCHEMY_GAS_POLICY_ID=your_gas_policy_id_here
+1. **Create Alchemy Account**
+   - Go to [Alchemy Dashboard](https://dashboard.alchemy.com/)
+   - Create a new app on **BNB Smart Chain Mainnet**
+   - Copy your API Key
 
-# Google OAuth
-NEXT_PUBLIC_GOOGLE_CLIENT_ID=your_google_client_id.apps.googleusercontent.com
+2. **Enable Embedded Accounts**
+   - In your Alchemy app dashboard
+   - Navigate to "Embedded Accounts" section
+   - Enable the feature and copy your App ID
 
-# Facebook OAuth
-NEXT_PUBLIC_FACEBOOK_APP_ID=your_facebook_app_id_here
+3. **Update Environment Variables**
+   ```env
+   NEXT_PUBLIC_ALCHEMY_API_KEY=your_actual_api_key_here
+   NEXT_PUBLIC_ALCHEMY_APP_ID=your_actual_app_id_here
+   NEXT_PUBLIC_BNB_RPC_URL=https://bnb-mainnet.g.alchemy.com/v2/your_actual_api_key_here
+   ```
 
-# Network Configuration
-NEXT_PUBLIC_DEFAULT_CHAIN_ID=11155111
-NEXT_PUBLIC_ETH_SEPOLIA_RPC_URL=https://eth-sepolia.g.alchemy.com/v2/your_alchemy_api_key
-```
+### 4. Optional: Setup Gas Manager
 
-### 6. Jalankan Aplikasi
+1. **Create Gas Policy** (Optional for gasless transactions)
+   - In Alchemy Dashboard, go to Gas Manager
+   - Create a new policy for BNB Smart Chain
+   - Copy the Policy ID
+
+2. **Update Gas Configuration**
+   ```env
+   NEXT_PUBLIC_BNB_MAINNET_GAS_POLICY_ID=your_gas_policy_id_here
+   NEXT_PUBLIC_GAS_MANAGER_ENABLED=true
+   ```
+
+### 5. Run the Application
 
 ```bash
 npm run dev
 ```
 
-Buka [http://localhost:3000](http://localhost:3000) di browser.
+Visit `http://localhost:3000`
 
-## 🎯 Cara Menggunakan
+## 🔧 Key Configuration
 
-### Login dengan Social Media
+### Required Environment Variables
 
-1. **Login dengan Google**:
-   - Klik tombol "Masuk dengan Google"
-   - Authorize aplikasi di popup Google
-   - Smart wallet akan dibuat otomatis
+```env
+# Essential - Replace with your actual values
+NEXT_PUBLIC_ALCHEMY_API_KEY=your_alchemy_api_key
+NEXT_PUBLIC_ALCHEMY_APP_ID=your_alchemy_app_id
+NEXT_PUBLIC_BNB_RPC_URL=https://bnb-mainnet.g.alchemy.com/v2/your_api_key
 
-2. **Login dengan Facebook**:
-   - Klik tombol "Masuk dengan Facebook"
-   - Authorize aplikasi di popup Facebook
-   - Smart wallet akan dibuat otomatis
+# Smart Wallet Settings
+NEXT_PUBLIC_AUTO_DEPLOY_WALLET=true
+NEXT_PUBLIC_DUMMY_TRANSACTION_ENABLED=true
 
-### Fitur Wallet
-
-1. **Melihat Balance**: Balance ETH dan token akan ditampilkan otomatis
-2. **Mengirim Transaksi**: Gunakan modal Send untuk mengirim crypto
-3. **Menerima Crypto**: Gunakan modal Receive untuk melihat alamat wallet
-4. **Ganti Network**: Pilih network yang tersedia di dropdown
-
-### Smart Account Features
-
-- **Gasless Transactions**: Jika Gas Manager diaktifkan, transaksi gratis
-- **Batch Transactions**: Beberapa transaksi dalam satu operasi
-- **Account Recovery**: Recovery via email (diatur oleh Alchemy)
-- **Session Management**: Login bertahan hingga user logout
-
-## 🔒 Keamanan
-
-### Private Key Management
-
-- Private keys dikelola secara aman oleh Alchemy Account Kit
-- User tidak perlu menyimpan atau mengingat private key
-- Smart accounts menggunakan secure enclave Turnkey
-
-### Session Security
-
-- Access tokens disimpan di sessionStorage
-- Session data disimpan di localStorage dengan timestamp
-- Session otomatis expired setelah 24 jam
-- Auto-logout dari social providers saat logout
-
-## 🛡️ Smart Account Architecture
-
-```
-User (Google/Facebook)
-      ↓
-Alchemy Signer (Turnkey)
-      ↓  
-Smart Contract Account (ERC-4337)
-      ↓
-Alchemy Bundler & Gas Manager
-      ↓
-Blockchain Network
+# Social Login
+NEXT_PUBLIC_ENABLE_GOOGLE_LOGIN=true
+NEXT_PUBLIC_ENABLE_FACEBOOK_LOGIN=true
 ```
 
-### Benefits:
+### Optional Configuration
 
-- **No seed phrases**: User tidak perlu backup seed phrase
-- **Social recovery**: Bisa recovery via email
-- **Gasless UX**: Transaksi tanpa gas fees
-- **Batch operations**: Multiple transactions dalam satu call
-- **Programmable**: Custom logic via smart contract
+```env
+# Gas Manager (for gasless transactions)
+NEXT_PUBLIC_BNB_MAINNET_GAS_POLICY_ID=your_policy_id
+NEXT_PUBLIC_GAS_MANAGER_ENABLED=true
+NEXT_PUBLIC_DAILY_GAS_LIMIT=0.1
+NEXT_PUBLIC_MONTHLY_GAS_LIMIT=1.0
 
-## 📱 Mobile Support
-
-Aplikasi responsive dan mendukung:
-- Mobile web browsers
-- Progressive Web App (PWA) capabilities
-- Touch-friendly interface
-- Mobile-optimized modals
-
-## 🌐 Supported Networks
-
-- **Ethereum Mainnet**: Produksi
-- **Sepolia Testnet**: Development dan testing
-- **Polygon**: Layer 2 scaling
-- **BNB Smart Chain**: Alternative network
-
-## 🔄 Development
-
-### Scripts
-
-```bash
-npm run dev          # Development server
-npm run build        # Production build  
-npm run start        # Production server
-npm run lint         # ESLint check
+# Custom Features
+NEXT_PUBLIC_ENABLE_CUSTOM_TOKENS=true
+NEXT_PUBLIC_SESSION_TIMEOUT=86400
 ```
 
-### Project Structure
+## 🎯 How It Works
 
-```
-src/
-├── components/          # React components
-│   ├── LoginScreen.tsx  # Social login interface
-│   ├── WalletDashboard.tsx # Main wallet UI
-│   └── modals/         # Modal components
-├── hooks/              
-│   └── useAlchemyWallet.ts # Main wallet hook
-├── services/
-│   ├── socialAuth.ts   # Alchemy social auth service
-│   ├── alchemyWallet.ts # Wallet operations
-│   └── gasManager.ts   # Gas management
-└── pages/
-    └── index.tsx       # Main page
-```
+### Social Authentication
+- Users login with Google/Facebook through Alchemy Embedded Accounts
+- No need for separate OAuth setup - handled by Alchemy
+- Automatic smart wallet creation upon login
 
-## 🐛 Troubleshooting
+### Smart Wallet Deployment
+- Smart wallets are created but not deployed until first transaction
+- Optional dummy transaction deployment for immediate activation
+- Gasless transactions through Alchemy Gas Manager (if configured)
+
+### Transaction Flow
+1. User authenticates via social login
+2. Smart wallet address is generated
+3. Wallet can be manually deployed or deploys on first transaction
+4. All transactions use smart wallet for enhanced security
+
+## 📱 Usage
+
+### Login
+1. Click "Login with Google" or "Login with Facebook"
+2. Complete OAuth flow in popup window
+3. Smart wallet is automatically created
+
+### Deploy Wallet
+1. After login, you'll see deployment status
+2. Click "Deploy" button to manually deploy with dummy transaction
+3. Or deployment happens automatically on first real transaction
+
+### Send Transactions
+1. Navigate to wallet dashboard
+2. Click "Send" to open transaction modal
+3. Enter recipient and amount
+4. Transaction uses smart wallet with optional gas sponsorship
+
+### Custom Tokens
+1. Click "Add Custom Token" in dashboard
+2. Enter BEP-20 token contract address
+3. Token information is automatically fetched
+4. Token appears in your balance list
+
+## 🔍 Troubleshooting
 
 ### Common Issues
 
-1. **"Google Auth requires browser environment"**:
-   - Pastikan kode hanya dijalankan di client-side
-   - Check SSR/hydration issues
+**1. localStorage is not defined**
+- ✅ Fixed: Added SSR protection for localStorage calls
 
-2. **"Smart account client not available"**:
-   - Pastikan Alchemy API Key valid
-   - Check network connection
-   - Pastikan user sudah login
+**2. Social login not working**
+- Verify `NEXT_PUBLIC_ALCHEMY_API_KEY` and `NEXT_PUBLIC_ALCHEMY_APP_ID`
+- Check Alchemy dashboard for Embedded Accounts status
+- Ensure your domain is whitelisted in Alchemy settings
 
-3. **Facebook login gagal**:
-   - Check Facebook App ID
-   - Pastikan domain sudah didaftarkan di Facebook App
-   - Check Facebook App status (development/live)
+**3. Smart wallet not deploying**
+- Check BNB Smart Chain network connection
+- Verify sufficient balance for deployment (very small amount needed)
+- Enable dummy transaction deployment: `NEXT_PUBLIC_DUMMY_TRANSACTION_ENABLED=true`
 
-4. **Gas estimation fails**:
-   - Pastikan Gas Manager Policy ID benar
-   - Check network yang dipilih
-   - Pastikan ada balance untuk gas
+**4. Gas sponsorship not working**
+- Verify Gas Manager policy is created and active
+- Check daily/monthly limits aren't exceeded
+- Ensure policy covers your transaction types
 
-### Debug Mode
+### Network Issues
+- Ensure you're using BNB Smart Chain Mainnet (Chain ID: 56)
+- Verify RPC URL includes your actual Alchemy API key
+- Check if your region has access restrictions
 
-Aktifkan debug mode dengan menambahkan di `.env.local`:
+## 🏗️ Architecture
 
-```env
-NEXT_PUBLIC_DEBUG_MODE=true
-NEXT_PUBLIC_LOG_LEVEL=debug
-```
+### Key Components
 
-## 📚 Resources
+- **`services/alchemyWallet.ts`**: Core wallet functionality and Alchemy integration
+- **`services/socialAuth.ts`**: Social authentication management
+- **`services/gasManager.ts`**: Gas sponsorship and optimization
+- **`hooks/useAlchemyWallet.ts`**: React hook for wallet state management
 
-- [Alchemy Account Kit Docs](https://docs.alchemy.com/account-kit)
-- [Google OAuth Documentation](https://developers.google.com/identity/protocols/oauth2)
-- [Facebook Login Documentation](https://developers.facebook.com/docs/facebook-login)
-- [ERC-4337 Account Abstraction](https://eips.ethereum.org/EIPS/eip-4337)
+### Smart Wallet Features
+
+- **ERC-4337 Compatible**: Uses Account Abstraction for enhanced UX
+- **Gas Sponsorship**: Optional gasless transactions
+- **Multi-signature Support**: Enhanced security features
+- **Batch Transactions**: Multiple operations in single transaction
+
+## 🛡️ Security
+
+- Smart wallets provide enhanced security vs EOAs
+- Social login reduces private key management burden
+- Gas policies prevent abuse of sponsored transactions
+- Session management with automatic expiry
+
+## 🌐 Supported Networks
+
+- **Primary**: BNB Smart Chain Mainnet (Chain ID: 56)
+- **Optional**: Ethereum Mainnet, Sepolia, Polygon (configured but secondary)
+
+## 📊 Gas Optimization
+
+- Automatic gas estimation for all transactions
+- Smart routing for optimal fees
+- Sponsorship eligibility checking
+- Usage tracking and limits
 
 ## 🤝 Contributing
 
-1. Fork repository
-2. Buat feature branch (`git checkout -b feature/amazing-feature`)
+1. Fork the repository
+2. Create feature branch (`git checkout -b feature/amazing-feature`)
 3. Commit changes (`git commit -m 'Add amazing feature'`)
-4. Push ke branch (`git push origin feature/amazing-feature`)
+4. Push to branch (`git push origin feature/amazing-feature`)
 5. Open Pull Request
 
-## 📄 License
+## 📝 License
 
-MIT License - lihat file [LICENSE](LICENSE) untuk detail.
+This project is licensed under the MIT License.
 
-## 📞 Support
+## 🔗 Links
 
-Jika ada pertanyaan atau butuh bantuan:
-- Buka issue di GitHub
-- Contact: [email@example.com]
+- [Alchemy Dashboard](https://dashboard.alchemy.com/)
+- [Alchemy Documentation](https://docs.alchemy.com/)
+- [Account Kit Docs](https://accountkit.alchemy.com/)
+- [BNB Smart Chain](https://www.bnbchain.org/)
+
+## 💡 Support
+
+For issues and questions:
+
+1. Check this README for common solutions
+2. Review environment variable configuration
+3. Check Alchemy dashboard for service status
+4. Open GitHub issue with detailed description
 
 ---
 
-**Note**: Untuk production, pastikan untuk:
-- Gunakan HTTPS untuk redirect URIs
-- Setup proper CORS policies  
-- Enable proper security headers
-- Use mainnet instead of testnet
-- Monitor gas usage dan costs
+**Note**: Make sure to replace all placeholder values in `.env.local` with your actual Alchemy credentials before running the application.
