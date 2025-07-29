@@ -105,7 +105,7 @@ class SocialAuthService {
       console.log('🔐 Starting email authentication with Alchemy Embedded Accounts...')
       
       // Use Alchemy wallet service for email authentication
-      const smartAccountAddress = await alchemyWallet.authenticateWithSocial('email')
+      const smartAccountAddress = await alchemyWallet.authenticateWithSocial('email', email)
       const userInfo = await alchemyWallet.getUserInfo()
       const currentNetwork = alchemyWallet.getCurrentNetwork()
       
@@ -205,9 +205,14 @@ class SocialAuthService {
     }
   }
 
-  // Store user session in localStorage
+  // Store user session in localStorage (client-side only)
   private storeUserSession(user: UserProfile): void {
     try {
+      if (typeof window === 'undefined') {
+        console.warn('localStorage not available on server-side')
+        return
+      }
+      
       const sessionData = {
         user,
         timestamp: Date.now(),
@@ -221,9 +226,14 @@ class SocialAuthService {
     }
   }
 
-  // Restore user session from localStorage
+  // Restore user session from localStorage (client-side only)
   async restoreUserSession(): Promise<UserProfile | null> {
     try {
+      if (typeof window === 'undefined') {
+        console.warn('localStorage not available on server-side')
+        return null
+      }
+      
       const stored = localStorage.getItem('alchemy_user_session')
       if (!stored) {
         return null
@@ -259,9 +269,14 @@ class SocialAuthService {
     }
   }
 
-  // Clear user session
+  // Clear user session (client-side only)
   private clearUserSession(): void {
     try {
+      if (typeof window === 'undefined') {
+        console.warn('localStorage not available on server-side')
+        return
+      }
+      
       localStorage.removeItem('alchemy_user_session')
       console.log('🗑️ User session cleared')
     } catch (error) {
@@ -377,5 +392,14 @@ class SocialAuthService {
   }
 }
 
-const socialAuth = new SocialAuthService()
-export default socialAuth
+// Lazy instantiation to avoid SSR issues
+let socialAuth: SocialAuthService | null = null
+
+function getSocialAuth(): SocialAuthService {
+  if (!socialAuth) {
+    socialAuth = new SocialAuthService()
+  }
+  return socialAuth
+}
+
+export default getSocialAuth()

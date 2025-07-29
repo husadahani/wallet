@@ -1,6 +1,5 @@
 import { Address, formatEther, parseEther, formatUnits } from 'viem'
 import { BNB_MAINNET_CONFIG, SUPPORTED_NETWORKS } from './alchemyWallet'
-import alchemyWallet from './alchemyWallet'
 
 export interface GasPolicy {
   id: string
@@ -89,15 +88,23 @@ class AlchemyGasManagerService {
 
   // Initialize gas manager with current network
   constructor() {
-    this.loadUsageStats()
-    this.currentNetwork = alchemyWallet.getCurrentNetwork()
+    // Delay loading until client-side to avoid SSR issues
+    if (typeof window !== 'undefined') {
+      this.loadUsageStats()
+      // Set current network to default BNB mainnet initially
+      this.currentNetwork = BNB_MAINNET_CONFIG
+    }
+  }
+
+  // Update current network (called by wallet service)
+  updateNetwork(network: typeof BNB_MAINNET_CONFIG): void {
+    this.currentNetwork = network
   }
 
   // Check if gas sponsorship is available for the current transaction
   async checkSponsorshipEligibility(request: GasEstimateRequest): Promise<SponsorshipEligibility> {
     try {
-      const currentNetwork = alchemyWallet.getCurrentNetwork()
-      const gasPolicy = currentNetwork.gasPolicy
+      const gasPolicy = this.currentNetwork.gasPolicy
 
       if (!gasPolicy || !process.env.NEXT_PUBLIC_GAS_MANAGER_ENABLED) {
         return {
@@ -163,11 +170,10 @@ class AlchemyGasManagerService {
   // Estimate gas for transaction with Alchemy Gas Manager
   async estimateGas(request: GasEstimateRequest): Promise<GasEstimateResponse> {
     try {
-      const currentNetwork = alchemyWallet.getCurrentNetwork()
       const sponsorship = await this.checkSponsorshipEligibility(request)
 
       // Get gas price recommendations for the network
-      const gasPrices = await this.getGasPriceRecommendations(currentNetwork.chainId)
+      const gasPrices = await this.getGasPriceRecommendations(this.currentNetwork.chainId)
       
       // Estimate gas limit based on operation type
       const estimatedGasLimit = this.estimateGasLimit(request.operation || 'transfer', request.data)
@@ -178,7 +184,7 @@ class AlchemyGasManagerService {
       const estimatedCostEther = formatEther(BigInt(estimatedCost))
 
       // Get USD value if available
-      const estimatedCostUSD = await this.convertToUSD(estimatedCostEther, currentNetwork.symbol)
+      const estimatedCostUSD = await this.convertToUSD(estimatedCostEther, this.currentNetwork.symbol)
 
       return {
         gasLimit: estimatedGasLimit,
@@ -189,7 +195,7 @@ class AlchemyGasManagerService {
         isSponsored: sponsorship.eligible,
         sponsorshipReason: sponsorship.reason,
         gasPolicy: sponsorship.policy,
-        network: currentNetwork.name,
+        network: this.currentNetwork.name,
         recommendations: gasPrices
       }
     } catch (error) {
@@ -448,17 +454,15 @@ class AlchemyGasManagerService {
 
   // Get current gas policies for the network
   getCurrentGasPolicies(): GasPolicy[] {
-    const currentNetwork = alchemyWallet.getCurrentNetwork()
-    
-    if (!currentNetwork.gasPolicy) {
+    if (!this.currentNetwork.gasPolicy) {
       return []
     }
 
     // Mock policy data (in production, fetch from Alchemy API)
     return [{
-      id: currentNetwork.gasPolicy,
-      name: `${currentNetwork.name} Gas Sponsorship`,
-      networkId: currentNetwork.chainId,
+      id: this.currentNetwork.gasPolicy,
+      name: `${this.currentNetwork.name} Gas Sponsorship`,
+      networkId: this.currentNetwork.chainId,
       active: true,
       sponsorshipType: 'conditional',
       dailyLimit: process.env.NEXT_PUBLIC_DAILY_GAS_LIMIT || '0.1',
@@ -527,9 +531,14 @@ class AlchemyGasManagerService {
     return nextMonth.getTime()
   }
 
-  // Save usage stats to localStorage
+  // Save usage stats to localStorage (client-side only)
   private saveUsageStats(): void {
     try {
+      if (typeof window === 'undefined') {
+        console.warn('localStorage not available on server-side')
+        return
+      }
+      
       const statsData = {
         usage: Object.fromEntries(this.gasUsageStats),
         daily: Object.fromEntries(this.dailyUsage),
@@ -541,9 +550,14 @@ class AlchemyGasManagerService {
     }
   }
 
-  // Load usage stats from localStorage
+  // Load usage stats from localStorage (client-side only)
   private loadUsageStats(): void {
     try {
+      if (typeof window === 'undefined') {
+        console.warn('localStorage not available on server-side')
+        return
+      }
+      
       const stored = localStorage.getItem('alchemy_gas_usage')
       if (stored) {
         const statsData = JSON.parse(stored)
@@ -588,5 +602,14 @@ class AlchemyGasManagerService {
   }
 }
 
-const gasManager = new AlchemyGasManagerService()
-export default gasManager
+// Lazy instantiation to avoid SSR issues
+let gasManager: AlchemyGasManagerService | null = null
+
+function getGasManager(): AlchemyGasManagerService {
+  if (!gasManager) {
+    gasManager = new AlchemyGasManagerService()
+  }
+  return gasManager
+}
+
+export default getGasManager()

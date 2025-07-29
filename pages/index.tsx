@@ -26,12 +26,14 @@ export default function Home() {
     currentNetwork,
     gasManagerEnabled,
     smartAccountDeployed,
+    isDeploying,
     authenticateWithGoogle,
     authenticateWithFacebook,
     authenticateWithEmail,
     logout,
     sendToken,
-    refreshWalletData
+    refreshWalletData,
+    deploySmartWallet
   } = useAlchemyWallet()
 
   const showNotification = (message: string) => {
@@ -54,6 +56,9 @@ export default function Home() {
       </Head>
 
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+        {/* Alchemy Signer iframe container */}
+        <div id="alchemy-signer-iframe" style={{ display: 'none' }}></div>
+        
         {!isConnected ? (
           <LoginScreen
             onGoogleLogin={authenticateWithGoogle}
@@ -130,11 +135,60 @@ export default function Home() {
 
         {/* Deploy Status */}
         {isConnected && !smartAccountDeployed && !isLoading && (
-          <div className="fixed bottom-4 left-4 right-4 bg-blue-500 text-white px-4 py-3 rounded-lg shadow-lg max-w-md mx-auto">
+          <div className="fixed bottom-4 left-4 right-4 bg-gradient-to-r from-blue-500 to-purple-600 text-white px-4 py-3 rounded-lg shadow-lg max-w-md mx-auto">
             <div className="flex justify-between items-center">
-              <div>
-                <p className="font-medium">Smart Wallet sedang di-setup</p>
-                <p className="text-sm opacity-90">Deployment otomatis saat transaksi pertama</p>
+              <div className="flex-1">
+                <p className="font-medium flex items-center">
+                  <span className="mr-2">🚀</span>
+                  {isDeploying ? 'Deploying Smart Wallet...' : 'Smart Wallet Ready to Deploy'}
+                </p>
+                <p className="text-sm opacity-90">
+                  {isDeploying 
+                    ? 'Membuat dummy transaksi untuk deploy...' 
+                    : 'Deploy otomatis atau manual untuk mulai bertransaksi'
+                  }
+                </p>
+              </div>
+              {!isDeploying && (
+                <button
+                  onClick={async () => {
+                    const success = await deploySmartWallet()
+                    if (success) {
+                      showNotification('🎉 Smart wallet berhasil di-deploy dengan gas sponsorship!')
+                    } else {
+                      showNotification('❌ Gagal deploy smart wallet. Coba lagi.')
+                    }
+                  }}
+                  className="ml-3 bg-white text-blue-600 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-100 transition-all duration-200 shadow-md"
+                >
+                  Deploy Now
+                </button>
+              )}
+              {isDeploying && (
+                <div className="ml-3 flex items-center text-sm">
+                  <div className="animate-spin inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full mr-2"></div>
+                  <span>Deploying...</span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Success notification for deployed wallet */}
+        {isConnected && smartAccountDeployed && !isLoading && (
+          <div className="fixed bottom-4 left-4 right-4 bg-gradient-to-r from-green-500 to-emerald-600 text-white px-4 py-3 rounded-lg shadow-lg max-w-md mx-auto">
+            <div className="flex items-center">
+              <div className="flex-1">
+                <p className="font-medium flex items-center">
+                  <span className="mr-2">✅</span>
+                  Smart Wallet Active
+                </p>
+                <p className="text-sm opacity-90">
+                  Gas sponsorship aktif - Transaksi gasless tersedia!
+                </p>
+              </div>
+              <div className="ml-3 text-2xl">
+                🎉
               </div>
             </div>
           </div>
